@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'kysely';
 import { DEFAULT_ROLE_PERMISSIONS } from '@ccih/domain';
 import { verifyAuditChain } from '../src/audit/audit';
-import { ORIGIN, login, setupTestApp, teardown, type TestContext } from './helpers';
+import { ORIGIN, TEST_PASSWORD, login, setupTestApp, teardown, type TestContext } from './helpers';
 
 let ctx: TestContext;
 beforeAll(async () => {
@@ -38,7 +38,7 @@ describe('health and anonymous access', () => {
 
 describe('authentication', () => {
   it('logs in with HttpOnly, SameSite=Strict cookies and returns permissions', async () => {
-    const res = await ctx.app.inject({ method: 'POST', url: '/api/auth/login', headers: { origin: ORIGIN }, payload: { login: 'enf.ccih', password: 'Teste-Integracao-2026!' } });
+    const res = await ctx.app.inject({ method: 'POST', url: '/api/auth/login', headers: { origin: ORIGIN }, payload: { login: 'enf.ccih', password: TEST_PASSWORD } });
     const session = res.cookies.find((c) => c.name === 'ccih_session')!;
     expect(session.httpOnly).toBe(true);
     expect(session.sameSite).toBe('Strict');
@@ -59,7 +59,7 @@ describe('authentication', () => {
 
   it('locks the account after the configured attempts and the admin can unlock it', async () => {
     for (let i = 0; i < 3; i++) await ctx.app.inject({ method: 'POST', url: '/api/auth/login', headers: { origin: ORIGIN }, payload: { login: 'auditor', password: 'errada' } });
-    const blocked = await ctx.app.inject({ method: 'POST', url: '/api/auth/login', headers: { origin: ORIGIN }, payload: { login: 'auditor', password: 'Teste-Integracao-2026!' } });
+    const blocked = await ctx.app.inject({ method: 'POST', url: '/api/auth/login', headers: { origin: ORIGIN }, payload: { login: 'auditor', password: TEST_PASSWORD } });
     expect(blocked.statusCode).toBe(401);
     expect((await lastAudit('login_failure'))?.context).toMatchObject({ reason: 'bloqueado' });
     const admin = await login(ctx.app, 'admin');
@@ -70,7 +70,9 @@ describe('authentication', () => {
 
   it('never stores the password or its hash in the audit log', async () => {
     const rows = await ctx.db.selectFrom('audit_log').select(['before', 'after', 'context']).execute();
-    expect(JSON.stringify(rows)).not.toMatch(/Teste-Integracao|argon2|password/);
+    const dump = JSON.stringify(rows);
+    expect(dump).not.toContain(TEST_PASSWORD);
+    expect(dump).not.toMatch(/argon2|password/);
   });
 
   it('expires idle sessions on the server and records it', async () => {

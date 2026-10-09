@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
@@ -9,7 +10,8 @@ import { seedDemo } from '../src/db/seed';
 import type { DB } from '../src/db/types';
 import { loadEnv, type Env } from '../src/env';
 
-export const TEST_PASSWORD = 'Teste-Integracao-2026!';
+/** Random per run: no fixed password lives in the repository. */
+export const TEST_PASSWORD = `Teste-${randomBytes(9).toString('base64url')}-Aa1!`;
 export const ORIGIN = 'http://localhost:5173';
 
 const envFile = fileURLToPath(new URL('../.env', import.meta.url));

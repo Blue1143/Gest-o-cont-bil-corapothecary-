@@ -35,22 +35,28 @@ npm ci
 
 O sistema usa dois papéis: um **dono** (roda migrações) e um **papel de aplicação** com privilégio mínimo (sem DDL, sem UPDATE/DELETE no log de auditoria).
 
+Nenhuma senha aparece nesta documentação nem deve ser digitada na linha de comando (ficaria no histórico do shell). Crie os papéis e defina as senhas pelo prompt oculto do `psql`:
+
 ```sql
--- como superusuário do PostgreSQL
-CREATE ROLE ccih_owner LOGIN PASSWORD '<senha forte>';
-CREATE ROLE ccih_app   LOGIN PASSWORD '<senha forte>';
+-- psql como superusuário do PostgreSQL
+CREATE ROLE ccih_owner LOGIN;
+CREATE ROLE ccih_app   LOGIN;
+\password ccih_owner
+\password ccih_app
 CREATE DATABASE ccih_dev  OWNER ccih_owner;
 CREATE DATABASE ccih_test OWNER ccih_owner;
 REVOKE ALL ON DATABASE ccih_dev, ccih_test FROM PUBLIC;
 GRANT CONNECT ON DATABASE ccih_dev, ccih_test TO ccih_app;
 ```
 
+`\password` pede a senha sem exibi-la e a envia já criptografada (SCRAM) ao servidor.
+
 ```bash
-cp apps/api/.env.example apps/api/.env      # preencha as URLs com as senhas acima
-npm run db:reset -w @ccih/api               # migrações + dados sintéticos de demonstração
+cp apps/api/.env.example apps/api/.env && chmod 600 apps/api/.env   # edite as URLs no editor, não no terminal
+npm run db:reset -w @ccih/api                                       # migrações + dados sintéticos de demonstração
 ```
 
-O seed cria um usuário sintético por perfil (`admin`, `enf.ccih`, `infecto`, `cme`, `auditor`, `gestor`, `consulta`) com **senhas aleatórias**, gravadas em `apps/api/.seed-credentials.local` (ignorado pelo git). Para testes automatizados, defina `SEED_PASSWORD`.
+O seed cria um usuário sintético por perfil (`admin`, `enf.ccih`, `infecto`, `cme`, `auditor`, `gestor`, `consulta`) com **senhas aleatórias**. Elas não são exibidas no terminal: ficam somente em `apps/api/.seed-credentials.local` (permissão 600, ignorado pelo git). Repasse cada senha só ao seu usuário e apague o arquivo depois; não cole senhas em chats, tickets ou documentação. Testes automatizados geram uma senha aleatória a cada execução.
 
 | Comando (`-w @ccih/api`) | O que faz |
 | --- | --- |
@@ -79,7 +85,7 @@ Sem backend, `VITE_DATA_SOURCE=demo` abre a interface com dados sintéticos gera
 | `npm run build` | Verifica tokens, gera `apps/web/dist` e `apps/api/dist` |
 | `npm run check` | Tudo acima |
 
-Os testes da API recriam o banco `ccih_test` a cada execução (`TEST_DATABASE_URL`, `TEST_DATABASE_OWNER_URL`). A CI (`.github/workflows/ci.yml`) sobe um PostgreSQL 16 e roda `npm audit`, lint, typecheck, testes e build.
+Os testes da API recriam o banco `ccih_test` a cada execução (`TEST_DATABASE_URL`, `TEST_DATABASE_OWNER_URL`). A CI (`.github/workflows/ci.yml`) sobe um PostgreSQL 16 efêmero, acessível só dentro do job e sem senha versionada, e roda `npm audit`, lint, typecheck, testes e build.
 
 ## Variáveis de ambiente
 
