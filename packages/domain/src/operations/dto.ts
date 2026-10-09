@@ -5,6 +5,7 @@ import type { BundleMetric, HandHygieneCategory } from './bundles';
 import type { AlertKind, AlertPriority, AlertStatus, FollowupMethod, FollowupOutcome } from './alerts';
 import type { RequiredTraining } from './training';
 import type { MovementKind, SupplyCategory } from './supplies';
+import type { AttachmentDto } from '../cme/dto';
 
 /** Payloads of the operational modules (Phase 4), shared by the API and the web client. */
 
@@ -58,7 +59,7 @@ export interface TrainingDto {
   id: string; title: string; theme: string; mandatory: boolean; validityMonths: number | null; targetJobRoleIds: string[]; description: string | null;
   active: boolean; rowVersion: number; sessions: number; required: number; covered: number; expiring: number; overdue: number;
 }
-export interface TrainingSessionDto { id: string; trainingId: string; heldOn: string; instructor: string; hours: number; sectorId: string | null; notes: string | null; attendees: number; origin: DataOrigin }
+export interface TrainingSessionDto { id: string; trainingId: string; heldOn: string; instructor: string; hours: number; sectorId: string | null; notes: string | null; attendees: number; origin: DataOrigin; attachments: AttachmentDto[] }
 export interface StaffMember { id: string; name: string; jobRoleId: string | null; jobRole: string | null; sectorId: string | null; active: boolean }
 export interface TrainingCoveragePayload {
   rows: Array<RequiredTraining & { professionalName: string }>;

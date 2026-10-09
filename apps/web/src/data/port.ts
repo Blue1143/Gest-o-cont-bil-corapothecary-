@@ -3,6 +3,8 @@ import type {
   MetricKey, OrgPayload, Paged, PatientDetail, PatientSummary, Permission, Procedure, Professional, SterilizationTestType, SurgeryDetail, SurgerySummary, WithProvenance,
   AlertDto, AlertSummary, BundleAuditDto, BundleSummary, BundleTemplateDto, HandHygieneDto, HandHygieneSummaryRow, NonconformityDetail, NonconformityDto,
   QualityAuditDetail, QualityAuditDto, StaffMember, SupplyDto, SupplyMovementDto, SurveillanceRow, TrainingCoveragePayload, TrainingDto, TrainingSessionDto,
+  AttachmentDto, CmeOverview, CmeTestDto, EquipmentStatus, IbControl, InstrumentSetDto, LoadDetail, LoadStatus, LoadSummary, PackagingType, RecordedTestType,
+  SterilizerDto, SterilizerType, TestResult, TraceResult,
 } from '@ccih/domain';
 
 export type { InstitutionData, Sector, SectorKind, Unit } from '@ccih/domain';
@@ -259,6 +261,50 @@ export interface OperationsPort {
   addFollowup(surgeryId: string, input: { contactedOn: string; method: string; outcome: string; notes: string | null; openCase: boolean }): Promise<{ caseId: string | null }>;
 }
 
+/* ---------- CME (Phase 5) ---------- */
+
+export interface SterilizerInput extends Justified {
+  code: string; name: string; type: SterilizerType; serial: string | null; sectorId: string; status: EquipmentStatus; statusReason: string | null;
+  qualificationDueOn: string | null; rowVersion: number | null;
+}
+export interface SetInput extends Justified {
+  code: string; name: string; specialty: string | null; composition: string | null; itemCount: number | null; packaging: PackagingType; implant: boolean; active: boolean; rowVersion: number | null;
+}
+export interface LoadInput {
+  sterilizerId: string; program: string; startedAt: string; notes: string | null; reprocessedFromId: string | null;
+  items: Array<{ setId: string | null; description: string | null; quantity: number; packaging: PackagingType | null; implant: boolean | null }>;
+}
+export interface CycleInput { endedAt: string; temperatureC: number | null; pressureKpa: number | null; exposureMinutes: number | null; physicalResult: 'conforme' | 'nao_conforme'; notes: string | null; rowVersion: number }
+export interface TestInput {
+  sterilizerId: string | null; loadId: string | null; type: RecordedTestType; result: TestResult; performedAt: string; indicatorLot: string; indicatorExpiry: string | null;
+  incubationStart: string | null; readAt: string | null; controlResult: IbControl | null; notes: string | null;
+}
+export interface TestReplaceInput { result: TestResult; readAt: string | null; controlResult: IbControl | null; notes: string | null; justification: string | null }
+export type AttachmentEntity = 'sterilization_test' | 'training_session';
+
+export interface CmePort {
+  overview(): Promise<CmeOverview>;
+  sterilizers(): Promise<{ sterilizers: SterilizerDto[] }>;
+  saveSterilizer(id: string | null, input: SterilizerInput): Promise<void>;
+  sets(): Promise<{ sets: InstrumentSetDto[] }>;
+  saveSet(id: string | null, input: SetInput): Promise<void>;
+  loads(q: Query): Promise<Paged<LoadSummary>>;
+  load(id: string): Promise<LoadDetail>;
+  createLoad(input: LoadInput): Promise<{ id: string; code: string }>;
+  finishCycle(id: string, input: CycleInput): Promise<void>;
+  decide(id: string, input: Justified & { status: LoadStatus; rowVersion: number }): Promise<void>;
+  bowieDick(from: string, to: string): Promise<{ tests: CmeTestDto[] }>;
+  createTest(input: TestInput): Promise<{ id: string }>;
+  replaceTest(id: string, input: TestReplaceInput): Promise<{ id: string }>;
+  trace(q: string): Promise<TraceResult>;
+  addSurgeryMaterial(surgeryId: string, input: { labelCode: string; usedAt: string | null }): Promise<void>;
+  addLooseUse(input: { labelCode: string; sectorId: string; usedAt: string }): Promise<void>;
+  voidUse(useId: string, justification: string): Promise<void>;
+  upload(entity: AttachmentEntity, entityId: string, file: File): Promise<AttachmentDto>;
+  /** Same-origin download link (the session cookie authorizes it; the API logs it). */
+  attachmentUrl(id: string): string;
+}
+
 export interface CcihDataSource {
   readonly origin: DataOrigin;
   readonly auth?: AuthPort;
@@ -267,6 +313,7 @@ export interface CcihDataSource {
   readonly clinical?: ClinicalPort;
   readonly orgAdmin?: OrgAdminPort;
   readonly operations?: OperationsPort;
+  readonly cme?: CmePort;
   getInstitution(): Promise<WithProvenance<InstitutionData>>;
   getFacts(query: FactsQuery): Promise<WithProvenance<{ rows: FactRow[] }>>;
 }

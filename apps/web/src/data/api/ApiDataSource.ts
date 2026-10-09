@@ -1,5 +1,5 @@
 import type { FactRow, InstitutionData, WithProvenance } from '@ccih/domain';
-import type { AdminPort, AuthPort, CcihDataSource, ClinicalPort, FactsQuery, OperationsPort, OrgAdminPort, SessionInfo } from '../port';
+import type { AdminPort, AuthPort, CcihDataSource, ClinicalPort, CmePort, FactsQuery, OperationsPort, OrgAdminPort, SessionInfo } from '../port';
 import { createHttpClient, type HttpClient } from './http';
 
 /** Backend source: every authorization decision is taken by the API; the UI only reflects it. */
@@ -10,6 +10,7 @@ export class ApiDataSource implements CcihDataSource {
   readonly clinical: ClinicalPort;
   readonly orgAdmin: OrgAdminPort;
   readonly operations: OperationsPort;
+  readonly cme: CmePort;
   private readonly http: HttpClient;
 
   constructor(base = '/api', onUnauthorized: () => void = () => {}) {
@@ -85,6 +86,27 @@ export class ApiDataSource implements CcihDataSource {
       updateSector: (sid, input) => ok(http.send('PUT', `/org/sectors/${id(sid)}`, input)),
       addBeds: (sid, input) => ok(http.send('POST', `/org/sectors/${id(sid)}/beds`, input)),
       updateBed: (b, input) => ok(http.send('PUT', `/org/beds/${id(b)}`, input)),
+    };
+    this.cme = {
+      overview: () => http.get('/cme/overview'),
+      sterilizers: () => http.get('/cme/sterilizers'),
+      saveSterilizer: (sid, input) => ok(sid ? http.send('PUT', `/cme/sterilizers/${id(sid)}`, input) : http.send('POST', '/cme/sterilizers', input)),
+      sets: () => http.get('/cme/sets'),
+      saveSet: (sid, input) => ok(sid ? http.send('PUT', `/cme/sets/${id(sid)}`, input) : http.send('POST', '/cme/sets', input)),
+      loads: (q) => http.get('/cme/loads', q),
+      load: (l) => http.get(`/cme/loads/${id(l)}`),
+      createLoad: (input) => http.send('POST', '/cme/loads', input),
+      finishCycle: (l, input) => ok(http.send('POST', `/cme/loads/${id(l)}/cycle`, input)),
+      decide: (l, input) => ok(http.send('POST', `/cme/loads/${id(l)}/decision`, input)),
+      bowieDick: (from, to) => http.get('/cme/bowie-dick', { from, to }),
+      createTest: (input) => http.send('POST', '/cme/tests', input),
+      replaceTest: (t, input) => http.send('POST', `/cme/tests/${id(t)}/replace`, input),
+      trace: (q) => http.get('/cme/trace', { q }),
+      addSurgeryMaterial: (sid, input) => ok(http.send('POST', `/surgeries/${id(sid)}/materials`, input)),
+      addLooseUse: (input) => ok(http.send('POST', '/cme/uses', input)),
+      voidUse: (u, justification) => ok(http.send('POST', `/material-uses/${id(u)}/void`, { justification })),
+      upload: (entity, entityId, file) => http.upload(`/attachments?entity=${entity}&entityId=${id(entityId)}`, file),
+      attachmentUrl: (a) => `${base}/attachments/${id(a)}`,
     };
     this.operations = {
       bundleTemplates: () => http.get('/bundles/templates'),

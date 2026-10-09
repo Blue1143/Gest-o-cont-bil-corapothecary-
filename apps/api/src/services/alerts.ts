@@ -1,10 +1,11 @@
 import { sql, type Kysely } from 'kysely';
 import {
-  IRAS_TYPES, addDays, buildAlertCandidates, dateInZone, rulesFromParameters, surveillanceEnd, todayIn,
-  type AlertCandidate,
+  IRAS_TYPES, addDays, bowieDickApplies, buildAlertCandidates, dateInZone, rulesFromParameters, surveillanceEnd, todayIn, zonedInstant,
+  type AlertCandidate, type AlertInput,
 } from '@ccih/domain';
 import type { DB } from '../db/types';
 import { loadRequiredTrainings, loadSupplies } from '../routes/training-supplies';
+import { currentOnly, evaluateLoads, loadPolicy } from '../repositories/cme';
 
 /**
  * Alert generation: candidates from the records → one open alert per deduplication key. A closed
@@ -66,9 +67,15 @@ export async function collectCandidates(db: Kysely<DB>, institutionId: string, n
     return end && end.end >= today && end.end <= addDays(today, 7) ? [{ surgeryId: s.id, procedure: s.name, patientLabel: label(s), windowEnd: end.end }] : [];
   });
 
+  const cme = await collectCme(db, institutionId, now, today, tz);
+
   const candidates = buildAlertCandidates({
     today,
-    rules: { investigationOverdueDays: rules.alerts.investigationOverdueDays?.value, deviceReviewDays: rules.alerts.deviceReviewDays?.value },
+    cme,
+    rules: {
+      investigationOverdueDays: rules.alerts.investigationOverdueDays?.value, deviceReviewDays: rules.alerts.deviceReviewDays?.value,
+      ibReadingHours: rules.cme.ibReadingHours?.value, qualificationWarningDays: rules.cme.qualificationWarningDays?.value,
+    },
     openCases: cases.map((c) => ({ id: c.id, typeLabel: IRAS_TYPES[c.iras_type].sigla, patientLabel: label(c), openedOn: dateInZone(c.created_at, tz), sectorId: c.sector_id })),
     openDevices: devices.map((d) => ({ id: d.id, type: d.device_type, patientId: d.patient_id, patientLabel: label(d), insertedOn: dateInZone(d.inserted_at, tz), sectorId: d.sector_id })),
     newMdr: mdr.map((m) => ({ isolateId: m.id, cultureId: m.culture_id, organism: m.organism, patientLabel: label(m), sectorId: m.sector_id, collectedOn: dateInZone(m.collected_at, tz) })),
@@ -78,6 +85,47 @@ export async function collectCandidates(db: Kysely<DB>, institutionId: string, n
     pendingFollowups,
   });
   return { candidates, suppressHours: rules.alerts.suppressHours?.value };
+}
+
+/** CME conditions: recalls, released loads that now fail, failed Bowie-Dick, late IB readings, qualification. */
+async function collectCme(db: Kysely<DB>, institutionId: string, now: Date, today: string, tz: string): Promise<NonNullable<AlertInput['cme']>> {
+  const since30 = zonedInstant(addDays(today, -30), 0, tz);
+  const [sterilizers, recalls, released, ib, bd] = await Promise.all([
+    db.selectFrom('sterilizer').select(['id', 'name', 'type', 'status', 'sector_id', 'qualification_due_on']).where('institution_id', '=', institutionId).execute(),
+    db.selectFrom('load_release_decision as d').innerJoin('sterilization_load as l', 'l.id', 'd.load_id').innerJoin('sterilizer as s', 's.id', 'l.sterilizer_id')
+      .select((eb) => [
+        'l.id', 'l.code', 's.sector_id',
+        eb.selectFrom('material_use as u').innerJoin('load_item as i', 'i.id', 'u.item_id').select((e) => e.fn.count<string>('u.surgery_id').distinct().as('n')).whereRef('i.load_id', '=', 'l.id').where('u.voided_at', 'is', null).as('surgeries'),
+        eb.selectFrom('material_use as u').innerJoin('load_item as i', 'i.id', 'u.item_id').innerJoin('surgery as su', 'su.id', 'u.surgery_id').innerJoin('admission as a', 'a.id', 'su.admission_id')
+          .select((e) => e.fn.count<string>('a.patient_id').distinct().as('n')).whereRef('i.load_id', '=', 'l.id').where('u.voided_at', 'is', null).as('patients'),
+      ])
+      .where('l.institution_id', '=', institutionId).where('d.from_status', '=', 'liberada').where('d.to_status', '=', 'rejeitada').where('d.decided_at', '>=', since30).execute(),
+    // Released in the last 60 days: an IB read later can still invalidate them.
+    db.selectFrom('sterilization_load as l').innerJoin('sterilizer as s', 's.id', 'l.sterilizer_id').select(['l.id', 'l.code', 's.sector_id'])
+      .where('l.institution_id', '=', institutionId).where('l.status', '=', 'liberada').where('l.started_at', '>=', zonedInstant(addDays(today, -60), 0, tz)).execute(),
+    db.selectFrom('sterilization_test as t').innerJoin('sterilization_load as l', 'l.id', 't.load_id').innerJoin('sterilizer as s', 's.id', 't.sterilizer_id')
+      .select(['t.id', 't.replaces_id', 't.result', 't.incubation_start', 'l.id as load_id', 'l.code', 's.sector_id'])
+      .where('t.institution_id', '=', institutionId).where('t.type', '=', 'IB').where('t.performed_on', '>=', addDays(today, -30)).execute(),
+    db.selectFrom('sterilization_test').select(['id', 'replaces_id', 'sterilizer_id', 'result', 'performed_at']).where('institution_id', '=', institutionId).where('type', '=', 'BOWIE_DICK').where('performed_on', '=', today).orderBy('performed_at').execute(),
+  ]);
+  // IB tests can be replaced by a reading made after the 30-day window started: look at all replacements.
+  const ibReplacements = ib.length ? await db.selectFrom('sterilization_test').select(['id', 'replaces_id']).where('replaces_id', 'in', ib.map((t) => t.id)).execute() : [];
+  const replacedIb = new Set(ibReplacements.map((r) => r.replaces_id));
+  const { policy } = await loadPolicy(db, institutionId);
+  const evals = await evaluateLoads(db, institutionId, released.map((l) => l.id), tz, policy);
+  const currentBd = currentOnly(bd);
+  return {
+    recalledLoads: recalls.map((r) => ({ loadId: r.id, code: r.code, surgeries: Number(r.surgeries ?? 0), patients: Number(r.patients ?? 0), sectorId: r.sector_id })),
+    releasedWithFailure: released.flatMap((l) => {
+      const ev = evals.get(l.id)?.evaluation;
+      return ev?.status === 'rejeitada' ? [{ loadId: l.id, code: l.code, reason: ev.reasons.join(' '), sectorId: l.sector_id }] : [];
+    }),
+    failedBowieDick: sterilizers.filter((s) => s.status === 'ativo' && bowieDickApplies(s.type) && currentBd.filter((t) => t.sterilizer_id === s.id).at(-1)?.result === 'reprovado')
+      .map((s) => ({ sterilizerId: s.id, name: s.name, sectorId: s.sector_id })),
+    pendingIb: ib.filter((t) => t.result === 'pendente' && !replacedIb.has(t.id) && t.incubation_start)
+      .map((t) => ({ testId: t.id, loadId: t.load_id, loadCode: t.code, hours: (now.getTime() - t.incubation_start!.getTime()) / 3_600_000, sectorId: t.sector_id })),
+    qualifications: sterilizers.filter((s) => s.status !== 'inativo' && s.qualification_due_on).map((s) => ({ sterilizerId: s.id, name: s.name, dueOn: s.qualification_due_on!, sectorId: s.sector_id })),
+  };
 }
 
 const inflight = new Map<string, Promise<{ created: number; resolved: number }>>();
@@ -109,6 +157,12 @@ async function generate(db: Kysely<DB>, institutionId: string, now: Date): Promi
         ? (await trx.selectFrom('alert').select('dedup_key').where('institution_id', '=', institutionId).where('status', '=', 'encerrado').where('closed_at', '>=', since).execute()).map((a) => a.dedup_key)
         : [],
     );
+    // Events (a new MDR isolate, a recall) are handled once: a closed alert is never recreated.
+    const eventKeys = candidates.filter((c) => c.oneShot).map((c) => c.dedupKey);
+    if (eventKeys.length) {
+      const handled = await trx.selectFrom('alert').select('dedup_key').where('institution_id', '=', institutionId).where('status', '=', 'encerrado').where('dedup_key', 'in', eventKeys).execute();
+      for (const h of handled) suppressed.add(h.dedup_key);
+    }
     let created = 0;
     const seen = new Set<string>();
     for (const c of candidates) {

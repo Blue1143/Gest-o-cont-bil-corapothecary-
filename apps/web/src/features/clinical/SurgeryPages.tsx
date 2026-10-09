@@ -8,6 +8,7 @@ import { useDataSource, useInstitution } from '../../data/source';
 import { useAdminMutation } from '../admin/shared';
 import { ApiError } from '../../data/api/http';
 import { ProphylaxisBadge, SurgeryForm } from './surgery-forms';
+import { SurgeryMaterialsCard } from '../cme/SurgeryMaterials';
 import { CaseStatusBadge, DemoTag, PageHeader, Pager, PatientLabel, RequireClinical, useClinical, useTimeZone } from './shared';
 
 export function SurgeriesPage() {
@@ -159,6 +160,7 @@ function Surgery() {
           </div>
         </Card>
       </div>
+      <SurgeryMaterialsCard surgery={s} />
       <FollowupsCard surgery={s} />
     </div>
   );

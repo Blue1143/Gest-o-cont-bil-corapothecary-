@@ -7,6 +7,7 @@ import { useSession } from '../auth/session';
 import { JustificationField, justificationError } from '../admin/shared';
 import { FormCard } from '../clinical/patient-forms';
 import { DemoTag, PageHeader, sectorName, useOrg, useTimeZone } from '../clinical/shared';
+import { Attachments } from '../cme/shared';
 import { RequireOps, pct, useOps, useOpsMutation, useUrlFilters } from './shared';
 
 const STATE_TONE: Record<TrainingState, Status> = { valido: 'ok', vencendo: 'warn', vencido: 'crit', pendente: 'crit' };
@@ -119,6 +120,7 @@ function Sessions() {
           { key: 'hours', label: 'Carga (h)', align: 'right', render: (s) => formatNumber(s.hours, 1) },
           { key: 'sector', label: 'Setor', value: (s) => (s.sectorId ? sectorName(org.data, s.sectorId) : 'Vários') },
           { key: 'attendees', label: 'Presentes', align: 'right' },
+          { key: 'files', label: 'Evidências', render: (s) => <Attachments entity="training_session" entityId={s.id} files={s.attachments} canUpload={session.can('quality:edit')} refresh={['trainings']} /> },
         ]} />
     </>
   );

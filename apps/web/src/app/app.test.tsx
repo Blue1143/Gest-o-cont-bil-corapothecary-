@@ -43,8 +43,8 @@ describe('app', () => {
   });
 
   it('says plainly when a module is not built yet', async () => {
-    renderApp('/cme');
-    expect(await screen.findByText('Em desenvolvimento — Fase 5')).toBeInTheDocument();
+    renderApp('/antimicrobianos');
+    expect(await screen.findByText('Em desenvolvimento — Fase 6')).toBeInTheDocument();
   });
 
   it('lists references as pending institutional validation', async () => {

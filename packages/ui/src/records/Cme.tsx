@@ -26,6 +26,10 @@ export interface SterilizationCycleProps {
   hasImplant?: boolean;
   operator?: string;
   actions?: ReactNode;
+  /** IANA zone for dates (the institution's). */
+  timeZone?: string;
+  /** Badge text when the load's own status is shown elsewhere (the badge then describes the policy evaluation). */
+  releaseLabel?: string;
 }
 
 const TEST_RESULT: Record<TestResult, [Status, string]> = { aprovado: ['ok', 'Aprovado'], reprovado: ['crit', 'Reprovado'], pendente: ['warn', 'Em leitura'] };
@@ -41,10 +45,10 @@ export function SterilizationCycle(p: SterilizationCycleProps) {
           <h3 className="ig-rec-name">{p.equipment}</h3>
           <div className="ig-row" style={{ marginTop: 4 }}>
             <span className="ig-mono">Ciclo {p.cycle}</span>
-            <span className="ig-muted ig-small">{[formatDate(p.startedAt), p.program].filter(Boolean).join(' · ')}</span>
+            <span className="ig-muted ig-small">{[formatDate(p.startedAt, p.timeZone), p.program].filter(Boolean).join(' · ')}</span>
           </div>
         </div>
-        <StatusBadge status={tone}>Carga {LOAD_STATUS_LABEL[p.release.status].toLowerCase()}</StatusBadge>
+        <StatusBadge status={tone}>{p.releaseLabel ?? `Carga ${LOAD_STATUS_LABEL[p.release.status].toLowerCase()}`}</StatusBadge>
       </div>
       {p.release.reasons.length ? (
         <ul className="ig-card-sub" style={{ margin: '8px 0 0', paddingLeft: 18 }}>
@@ -100,6 +104,7 @@ export interface TraceTimelineProps {
   heading: string;
   subtitle?: ReactNode;
   steps: TraceStep[];
+  timeZone?: string;
 }
 
 export function traceSummary(steps: TraceStep[]): { status: Status; label: string } {
@@ -114,7 +119,7 @@ const STEP_NOTE: Partial<Record<TraceStep['status'], string>> = {
   neutral: 'Etapa ainda não realizada.',
 };
 
-export function TraceTimeline({ heading, subtitle, steps }: TraceTimelineProps) {
+export function TraceTimeline({ heading, subtitle, steps, timeZone }: TraceTimelineProps) {
   const summary = traceSummary(steps);
   return (
     <article className="ig-card" aria-label={heading}>
@@ -135,7 +140,7 @@ export function TraceTimeline({ heading, subtitle, steps }: TraceTimelineProps) 
             <div>
               <div className="ig-tl-step">
                 <b>{s.title}</b>
-                <span className="ig-small ig-muted ig-num">{s.at ? formatDate(s.at) : 'Não registrado'}</span>
+                <span className="ig-small ig-muted ig-num">{s.at ? formatDate(s.at, timeZone) : 'Não registrado'}</span>
               </div>
               {s.detail || s.responsible ? (
                 <div className="ig-small ig-muted">

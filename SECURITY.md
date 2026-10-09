@@ -10,6 +10,8 @@ O sistema trata dados pessoais sensíveis de saúde (LGPD, art. 5º, II e art. 1
 | Identificação (LGPD) | Telas, listas e exportações mostram iniciais + prontuário. O nome completo é opcional, cifrado com AES-256-GCM (IV aleatório; id da instituição e do paciente como dado associado) e a chave fica fora do banco (`FIELD_ENCRYPTION_KEY`). Sem chave, o nome não é aceito. Exibição só com `patient:view_identified`, motivo obrigatório e registro `view_identified` no log; o texto nunca entra no log nem nas respostas comuns. |
 | Histórico clínico | Status de IRAS, evoluções CCIH, resultados de cultura, isolados e antibiogramas são somente inserção (sem UPDATE/DELETE para o papel de aplicação + trigger). Correções são novos registros com justificativa; o critério diagnóstico é congelado (título, versão, validação) no momento da decisão. |
 | Históricos operacionais | Status de auditorias e não conformidades, respostas de bundle, contatos pós-alta e movimentações de insumo também são somente inserção (mesmo mecanismo). Auditoria de bundle errada é **anulada** com justificativa, não excluída; estoque é corrigido por ajuste com motivo. |
+| CME | Decisões de liberação, testes, pacotes e anexos são somente inserção; a API só aceita **liberar** quando a política vigente permite (avaliada dentro da transação) e grava a versão da política aplicada. Equipamento em manutenção não inicia ciclo. Pacote só é registrado em uso se a carga estiver liberada, dentro da validade e sem uso anterior (índice único). Na rastreabilidade, o paciente (iniciais + prontuário) e a pesquisa por prontuário só existem para perfis com `patient:view` e dentro do escopo; os demais veem o procedimento e a contagem de expostos. |
+| Anexos | PDF, PNG ou JPEG decididos pelo **conteúdo** (assinatura do arquivo), não pelo nome; o tipo declarado precisa coincidir; PDF com conteúdo ativo (JavaScript, ações, arquivos embutidos) é recusado; tamanho máximo `UPLOAD_MAX_MB`; até 10 por registro. O arquivo fica fora da raiz web (`UPLOAD_DIR`, permissões 700/600) com nome gerado (UUID); o nome original só é exibido, depois de saneado. Download só com a permissão do registro, como `attachment` com `nosniff` e CSP restritiva, registrado no log. O log guarda metadados e SHA-256, nunca o conteúdo. |
 | Alertas | Cada tipo de alerta só é listado para perfis com a permissão do módulo de origem (ex.: insumos, treinamentos, IRAS); textos usam iniciais + prontuário; encerrar exige descrição do que foi feito e fica no log. |
 | Escopo clínico | Pacientes, internações, casos, cirurgias, culturas e censo filtrados pelos setores do usuário; registros fora do escopo respondem 404 (sem revelar existência). Escrita só em setores do escopo. Vínculos de um caso (dispositivo, cirurgia, culturas) precisam pertencer à mesma internação. |
 | Credenciais | Nenhuma no repositório. `.env` e `.seed-credentials.local` ignorados; seed gera senhas aleatórias. |
@@ -18,7 +20,7 @@ O sistema trata dados pessoais sensíveis de saúde (LGPD, art. 5º, II e art. 1
 | Enumeração de usuários | Mesma mensagem e tempo de resposta para usuário inexistente, senha errada ou conta bloqueada. |
 | Sessão | Token aleatório de 256 bits (só o SHA-256 é armazenado); cookie `HttpOnly; SameSite=Strict; Secure` (obrigatório em produção); expiração por inatividade e tempo máximo no servidor; revogação em logout e quando perfis/escopo mudam; aviso de inatividade no cliente; cache do navegador descartado ao sair. |
 | CSRF | Token de dupla submissão ligado à sessão + verificação de `Origin`; cookies `SameSite=Strict`. |
-| Autorização (RBAC) | 36 permissões granulares, verificadas em **todo** endpoint no servidor; negações registradas no log. Concluir ou reabrir um caso de IRAS exige `iras:decide`, verificado por transição. |
+| Autorização (RBAC) | 37 permissões granulares, verificadas em **todo** endpoint no servidor; negações registradas no log. Concluir ou reabrir um caso de IRAS exige `iras:decide`, verificado por transição. |
 | IDOR / escopo | Escopo por setor aplicado nas consultas; ids de setores e referências validados contra a instituição do usuário; UUIDs aleatórios (sem enumeração). |
 | Mass assignment | Esquemas zod `strict`; campos derivados (origem da meta, aprovador, direção) são definidos pelo servidor. |
 | SQL injection | Consultas parametrizadas (Kysely); identificadores dinâmicos validados. |
@@ -36,7 +38,7 @@ O sistema trata dados pessoais sensíveis de saúde (LGPD, art. 5º, II e art. 1
 
 - SSO (OIDC) e MFA conforme o provedor institucional.
 - Exportação de dados identificáveis com confirmação explícita, versão pseudonimizada e registro (Fase 7).
-- Uploads (anexos de Bowie-Dick, Fase 5): validação por conteúdo, tamanho máximo, armazenamento fora da raiz web, nome gerado.
+- Anexos: varredura antivírus no recebimento e armazenamento de objetos cifrado (S3 compatível) em produção.
 - Rotação da chave de cifragem de campos (recifrar com a nova chave); TLS e criptografia em repouso na infraestrutura; backups cifrados com teste de restauração.
 - Registro de acesso de leitura a prontuários (além da exibição de nome), com painel de acessos por paciente — Fase 8.
 - Monitoramento de segurança (picos de falhas de login, acessos negados) — Fase 8.

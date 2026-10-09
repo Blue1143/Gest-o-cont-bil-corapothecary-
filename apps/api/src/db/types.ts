@@ -449,6 +449,62 @@ export interface SsiFollowupTable {
   outcome: 'sem_sinais' | 'suspeita' | 'nao_localizado'; notes: string | null; case_id: string | null; recorded_by: string | null; recorded_by_name: string; created_at: CreatedAt;
 }
 
+type LoadStatusCol = 'aguardando' | 'liberada' | 'retida' | 'rejeitada' | 'reprocessamento';
+type PackagingCol = 'papel_grau_cirurgico' | 'sms' | 'container_rigido' | 'tecido_algodao' | 'outro';
+
+export interface SterilizerTable {
+  id: Generated<string>; institution_id: string; sector_id: string; code: string; name: string;
+  type: 'vapor_prevacuo' | 'vapor_gravitacional' | 'peroxido_plasma' | 'oxido_etileno' | 'outro'; serial: string | null;
+  status: ColumnType<'ativo' | 'manutencao' | 'inativo', 'ativo' | 'manutencao' | 'inativo' | undefined, 'ativo' | 'manutencao' | 'inativo'>;
+  status_reason: string | null; qualification_due_on: string | null; updated_at: Generated<Date>; row_version: Generated<number>;
+}
+
+export interface InstrumentSetTable {
+  id: Generated<string>; institution_id: string; code: string; name: string; specialty: string | null; composition: string | null; item_count: number | null;
+  packaging: PackagingCol; implant: Generated<boolean>; active: Generated<boolean>; updated_at: Generated<Date>; row_version: Generated<number>;
+}
+
+export interface SterilizationLoadTable {
+  id: Generated<string>; institution_id: string; sterilizer_id: string; code: string; program: string; started_at: Timestamp; ended_at: NullableTimestamp;
+  operator_id: string | null; operator_name: string;
+  /** numeric: pg returns a string. */
+  temperature_c: ColumnType<string | null, number | null | undefined, number | null>;
+  pressure_kpa: ColumnType<string | null, number | null | undefined, number | null>;
+  exposure_minutes: number | null; physical_result: 'conforme' | 'nao_conforme' | null; notes: string | null;
+  status: ColumnType<LoadStatusCol, LoadStatusCol | undefined, LoadStatusCol>; has_implant: Generated<boolean>; reprocessed_from_id: string | null;
+  data_origin: 'real' | 'demo'; created_at: CreatedAt; updated_at: Generated<Date>; row_version: Generated<number>;
+}
+
+export interface LoadItemTable {
+  id: Generated<string>; institution_id: string; load_id: string; position: number; label_code: string; set_id: string | null; description: string;
+  quantity: Generated<number>; packaging: PackagingCol; implant: Generated<boolean>; expires_on: string | null;
+}
+
+export interface SterilizationTestTable {
+  id: Generated<string>; institution_id: string; sterilizer_id: string; load_id: string | null;
+  type: 'BOWIE_DICK' | 'IQ1' | 'IQ2' | 'IQ3' | 'IQ4' | 'IQ5' | 'IQ6' | 'IB'; result: 'aprovado' | 'reprovado' | 'pendente';
+  performed_at: Timestamp; performed_on: string; indicator_lot: string; indicator_expiry: string; incubation_start: NullableTimestamp; read_at: NullableTimestamp;
+  control_result: 'positivo' | 'negativo' | null; notes: string | null; recorded_by: string | null; recorded_by_name: string; replaces_id: string | null;
+  justification: string | null; data_origin: 'real' | 'demo'; created_at: CreatedAt;
+}
+
+export interface LoadReleaseDecisionTable {
+  id: Generated<string>; load_id: string; from_status: LoadStatusCol | null; to_status: LoadStatusCol; decided_at: CreatedAt;
+  decided_by: string | null; decided_by_name: string; justification: string; policy_snapshot: ColumnType<unknown, string | null, never>; evaluation: ColumnType<unknown, string, never>;
+}
+
+export interface MaterialUseTable {
+  id: Generated<string>; institution_id: string; item_id: string; surgery_id: string | null; sector_id: string; used_at: Timestamp;
+  recorded_by: string | null; recorded_by_name: string; data_origin: 'real' | 'demo'; created_at: CreatedAt;
+  voided_at: NullableTimestamp; voided_by_name: string | null; void_reason: string | null;
+}
+
+export interface AttachmentTable {
+  id: Generated<string>; institution_id: string; entity: 'sterilization_test' | 'training_session'; entity_id: string; file_name: string;
+  mime: 'application/pdf' | 'image/png' | 'image/jpeg'; size_bytes: number; sha256: string; storage_key: string; uploaded_by: string | null;
+  uploaded_by_name: string; created_at: CreatedAt;
+}
+
 export interface DB {
   institution: InstitutionTable;
   unit: UnitTable;
@@ -499,4 +555,12 @@ export interface DB {
   supply_lot: SupplyLotTable;
   supply_movement: SupplyMovementTable;
   ssi_followup: SsiFollowupTable;
+  sterilizer: SterilizerTable;
+  instrument_set: InstrumentSetTable;
+  sterilization_load: SterilizationLoadTable;
+  load_item: LoadItemTable;
+  sterilization_test: SterilizationTestTable;
+  load_release_decision: LoadReleaseDecisionTable;
+  material_use: MaterialUseTable;
+  attachment: AttachmentTable;
 }

@@ -9,10 +9,20 @@ import { useAdmin } from './shared';
 const ACTION_LABEL: Record<string, string> = {
   login_success: 'Entrada no sistema', login_failure: 'Falha de entrada', logout: 'Saída', session_expired: 'Sessão expirada', access_denied: 'Acesso negado',
   create: 'Criação', update: 'Alteração', delete: 'Exclusão', validate: 'Validação', unlock: 'Desbloqueio', export: 'Exportação', seed: 'Carga de demonstração',
+  status_change: 'Mudança de situação', view_identified: 'Exibição de dado identificado', consolidate: 'Consolidação de indicadores',
+  upload: 'Envio de anexo', download: 'Download de anexo',
 };
 const ENTITY_LABEL: Record<string, string> = {
   indicator_target: 'Meta de indicador', rule_parameter: 'Parâmetro de regra', clinical_reference: 'Referência', load_release_policy: 'Política da CME',
-  app_user: 'Usuário', app_user_access: 'Acesso de usuário', session: 'Sessão', route: 'Rota', aggregate: 'Dados agregados', audit_log: 'Log de auditoria', institution: 'Instituição',
+  app_user: 'Usuário', app_user_access: 'Acesso de usuário', app_user_password: 'Senha de usuário', session: 'Sessão', route: 'Rota', aggregate: 'Dados agregados',
+  audit_log: 'Log de auditoria', institution: 'Instituição', unit: 'Unidade', sector: 'Setor', bed: 'Leito', professional: 'Profissional', indicator_fact: 'Indicadores consolidados',
+  patient: 'Paciente', admission: 'Internação', admission_movement: 'Movimentação', device_use: 'Dispositivo', ccih_note: 'Evolução CCIH', iras_case: 'Caso de IRAS',
+  surgery: 'Cirurgia', ssi_followup: 'Contato pós-alta', culture: 'Cultura', culture_result: 'Resultado de cultura',
+  bundle_template: 'Modelo de bundle', bundle_audit: 'Auditoria de bundle', hand_hygiene_observation: 'Higiene das mãos', quality_audit: 'Auditoria',
+  nonconformity: 'Não conformidade', action_plan: 'Ação 5W2H', alert: 'Alerta', training: 'Treinamento', training_session: 'Turma de treinamento',
+  supply: 'Insumo', supply_movement: 'Movimentação de insumo', attachment: 'Anexo',
+  sterilizer: 'Equipamento da CME', instrument_set: 'Caixa cirúrgica', sterilization_load: 'Carga / ciclo', sterilization_test: 'Teste da CME',
+  load_release_decision: 'Decisão de liberação', material_use: 'Uso de material',
 };
 const PAGE_SIZE = 25;
 

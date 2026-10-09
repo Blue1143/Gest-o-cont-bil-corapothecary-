@@ -32,6 +32,7 @@ export const PERMISSIONS = {
   'cme:view': 'Ver CME e rastreabilidade',
   'cme:edit': 'Registrar processamento, ciclos e testes',
   'cme:release': 'Liberar, reter ou rejeitar cargas',
+  'cme:configure': 'Cadastrar equipamentos da CME e o catálogo de caixas',
   'quality:view': 'Ver bundles, auditorias, treinamentos e insumos',
   'quality:edit': 'Registrar bundles, auditorias, treinamentos e insumos',
   'quality:configure': 'Configurar modelos de bundle, catálogo de treinamentos e de insumos',
@@ -71,7 +72,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'patient:view', 'patient:view_identified', 'iras:view', 'iras:edit', 'iras:decide', 'surgery:view',
     'micro:view', 'micro:edit', 'atm:view', 'atm:review', 'alerts:view', 'alerts:manage', 'export:aggregate',
   ],
-  cme: ['cme:view', 'cme:edit', 'cme:release', 'alerts:view'],
+  cme: ['cme:view', 'cme:edit', 'cme:release', 'cme:configure', 'alerts:view', 'alerts:manage'],
   auditor: [
     ...VIEW_CORE, 'reports:view', 'config:view', 'audit:view', 'users:view',
     'patient:view', 'iras:view', 'surgery:view', 'micro:view', 'atm:view', 'cme:view', 'quality:view', 'alerts:view',

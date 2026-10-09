@@ -36,6 +36,12 @@ const NcDetailPage = named(() => import('../features/operations/AuditsPages'), '
 const TrainingsPage = named(() => import('../features/operations/TrainingsPage'), 'TrainingsPage');
 const SuppliesPage = named(() => import('../features/operations/SuppliesPage'), 'SuppliesPage');
 const AlertsPage = named(() => import('../features/operations/AlertsPage'), 'AlertsPage');
+const CmePage = named(() => import('../features/cme/CmePage'), 'CmePage');
+const LoadDetailPage = named(() => import('../features/cme/LoadDetailPage'), 'LoadDetailPage');
+const BowieDickPage = named(() => import('../features/cme/EquipmentPages'), 'BowieDickPage');
+const EquipmentPage = named(() => import('../features/cme/EquipmentPages'), 'EquipmentPage');
+const SetsPage = named(() => import('../features/cme/EquipmentPages'), 'SetsPage');
+const TracePage = named(() => import('../features/cme/TracePage'), 'TracePage');
 const AccountPage = named(() => import('../features/auth/AccountPage'), 'AccountPage');
 
 const page = (el: ReactElement) => <Suspense fallback={<div className="page"><LoadingState /></div>}>{el}</Suspense>;
@@ -65,6 +71,12 @@ export const routes: RouteObject[] = [
       { path: 'treinamentos', element: guarded(['quality:view'], <TrainingsPage />) },
       { path: 'insumos', element: guarded(['quality:view'], <SuppliesPage />) },
       { path: 'alertas', element: guarded(['alerts:view'], <AlertsPage />) },
+      { path: 'cme', element: guarded(['cme:view'], <CmePage />) },
+      { path: 'cme/cargas/:id', element: guarded(['cme:view'], <LoadDetailPage />) },
+      { path: 'cme/bowie-dick', element: guarded(['cme:view'], <BowieDickPage />) },
+      { path: 'cme/equipamentos', element: guarded(['cme:view'], <EquipmentPage />) },
+      { path: 'cme/caixas', element: guarded(['cme:view'], <SetsPage />) },
+      { path: 'rastreabilidade', element: guarded(['cme:view'], <TracePage />) },
       { path: 'conta', element: page(<AccountPage />) },
       {
         path: 'admin',

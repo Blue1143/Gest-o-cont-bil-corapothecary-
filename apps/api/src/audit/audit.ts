@@ -10,7 +10,7 @@ import { sha256 } from '../security/crypto';
 export type AuditAction =
   | 'login_success' | 'login_failure' | 'logout' | 'session_expired' | 'access_denied'
   | 'create' | 'update' | 'delete' | 'validate' | 'unlock' | 'export' | 'seed'
-  | 'status_change' | 'view_identified' | 'consolidate';
+  | 'status_change' | 'view_identified' | 'consolidate' | 'upload' | 'download';
 
 export interface AuditActor {
   institutionId: string | null;

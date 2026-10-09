@@ -58,6 +58,14 @@ Fatos mensais por setor (`FactRow`: período, setor, contagens) → `computeIndi
 - **Consolidação**: `consolidateOperationalFacts` gera os fatos de bundles, higiene das mãos, preparação alcoólica e treinamentos; `POST /facts/consolidate` junta clínicos e operacionais.
 - **Senha obrigatória**: `requireAuth` bloqueia com 403 `troca_de_senha`; no cliente, `RequireSession` leva a `/conta` e o menu fica vazio até a troca.
 
+## CME (Fase 5)
+
+- **Porta `cme`** em `CcihDataSource`, só com o backend.
+- **Domínio** (`packages/domain/src/cme`): validação de testes (`checkTestRecord`: lote e validade do indicador, Bowie-Dick só em vapor pré-vácuo, incubação/leitura/controle do IB), fluxo de decisão (`LOAD_TRANSITIONS`, `checkLoadDecision`: liberar só com a política permitindo), validade (`sterileUntil`), uso do pacote (`checkItemUse`), códigos (`loadCode`, `itemLabel`) e consolidação (`consolidateCmeFacts`). A avaliação continua sendo `evaluateLoadRelease` (Fase 1), agora ciente de equipamentos sem Bowie-Dick.
+- **API** (`routes/cme.ts`, `repositories/cme.ts`): `evaluateLoads` monta, por carga, os testes vigentes (não substituídos), o registro físico e o último Bowie-Dick do dia anterior ao início do ciclo; a decisão reavalia dentro da transação e guarda a política aplicada. Escopo pelo setor do equipamento.
+- **Anexos** (`services/attachments.ts`, `routes/attachments.ts`): corpo binário cru (sem multipart), tipo pelo conteúdo, armazenamento em disco fora da raiz web; servem testes da CME e turmas de treinamento.
+- **Alertas**: `collectCme` alimenta `buildAlertCandidates`; candidatos de **evento** (`oneShot`: MDR novo, recolhimento) nunca são recriados depois de encerrados.
+
 ## Sessão no cliente
 
 `SessionProvider` consulta `/auth/me` (que responde `{ authenticated: false }` para visitantes), expõe `can(...permissões)` e o motivo do fim da sessão (`saida`, `inatividade`, `expirada`). `RequireSession` e `Guard` fazem os redirecionamentos; o menu é filtrado por permissão. Ao sair ou expirar, o cache inteiro de consultas é descartado. `IdleWarning` avisa 2 minutos antes da expiração por inatividade e mantém a sessão viva enquanto há atividade real.

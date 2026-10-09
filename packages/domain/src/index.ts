@@ -29,3 +29,6 @@ export * from './operations/bundles';
 export * from './operations/alerts';
 export * from './operations/consolidation';
 export * from './operations/dto';
+export * from './cme/cme';
+export * from './cme/consolidation';
+export * from './cme/dto';

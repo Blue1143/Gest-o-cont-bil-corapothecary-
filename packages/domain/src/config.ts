@@ -70,6 +70,14 @@ export interface InstitutionalRules {
     /** After an alert is closed, the same condition does not reopen it for this long. */
     suppressHours?: RuleParameter<number>;
   };
+  cme: {
+    /** Days a sterilized package stays usable (institutional, by packaging validation). */
+    shelfLifeDays?: RuleParameter<number>;
+    /** Hours after the incubation start by which a biological indicator must be read. */
+    ibReadingHours?: RuleParameter<number>;
+    /** Days before the thermal qualification due date that raise an alert. */
+    qualificationWarningDays?: RuleParameter<number>;
+  };
 }
 
 export interface InstitutionalConfig {
@@ -88,6 +96,7 @@ export const emptyRules = (): InstitutionalRules => ({
   training: {},
   antimicrobials: {},
   alerts: {},
+  cme: {},
 });
 
 export function findTarget(config: InstitutionalConfig, indicatorId: string): IndicatorTarget | undefined {

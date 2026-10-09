@@ -19,6 +19,8 @@ import { FieldCipher } from './security/field-crypto';
 import { qualityRoutes } from './routes/quality';
 import { trainingSupplyRoutes } from './routes/training-supplies';
 import { alertRoutes } from './routes/alerts';
+import { attachmentRoutes } from './routes/attachments';
+import { cmeRoutes } from './routes/cme';
 
 export interface AppOptions {
   db: Kysely<DB>;
@@ -62,6 +64,8 @@ export async function buildApp({ db, env, logger = true }: AppOptions): Promise<
     }
     const status = typeof (error as { statusCode?: number }).statusCode === 'number' ? (error as { statusCode: number }).statusCode : 500;
     if (status === 429) return reply.status(429).send({ error: 'limite', message: 'Muitas tentativas. Aguarde um minuto e tente novamente.' });
+    if (status === 413) return reply.status(413).send({ error: 'tamanho', message: 'Arquivo ou requisição maior que o permitido.' });
+    if (status === 415) return reply.status(415).send({ error: 'formato', message: 'Formato não aceito.' });
     if (status < 500) return reply.status(status).send({ error: 'requisicao', message: 'Requisição inválida.' });
     req.log.error({ err: error }, 'erro interno');
     return reply.status(500).send({ error: 'interno', message: 'Erro interno. Informe ao suporte o código da requisição.', requestId: req.id });
@@ -86,6 +90,8 @@ export async function buildApp({ db, env, logger = true }: AppOptions): Promise<
       await api.register(qualityRoutes, { db });
       await api.register(trainingSupplyRoutes, { db });
       await api.register(alertRoutes, { db });
+      await api.register(attachmentRoutes, { db, env });
+      await api.register(cmeRoutes, { db });
     },
     { prefix: '/api' },
   );

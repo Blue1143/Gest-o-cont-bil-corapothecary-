@@ -38,10 +38,13 @@ export const RULE_PARAMETERS: RuleParameterSpec[] = [
   spec('alerts', 'investigationOverdueDays', 'Alerta de investigação de IRAS sem conclusão após', 'dias', 1, 60),
   spec('alerts', 'deviceReviewDays', 'Alerta de revisão de dispositivo em uso após', 'dias', 1, 60),
   spec('alerts', 'suppressHours', 'Não reabrir alerta encerrado antes de', 'h', 1, 720),
+  spec('cme', 'shelfLifeDays', 'Validade da esterilização dos pacotes', 'dias', 1, 365),
+  spec('cme', 'ibReadingHours', 'Prazo para leitura do indicador biológico após a incubação', 'h', 1, 168),
+  spec('cme', 'qualificationWarningDays', 'Alerta de qualificação de equipamento a vencer', 'dias', 1, 180),
 ];
 
 export const RULE_GROUP_LABEL: Record<keyof InstitutionalRules, string> = {
-  devices: 'Dispositivos', admissions: 'Internação', surgery: 'Cirurgia', supplies: 'Insumos', training: 'Treinamentos', antimicrobials: 'Antimicrobianos', alerts: 'Alertas',
+  devices: 'Dispositivos', admissions: 'Internação', surgery: 'Cirurgia', supplies: 'Insumos', training: 'Treinamentos', antimicrobials: 'Antimicrobianos', alerts: 'Alertas', cme: 'CME',
 };
 
 const BY_KEY = new Map(RULE_PARAMETERS.map((s) => [s.key, s]));

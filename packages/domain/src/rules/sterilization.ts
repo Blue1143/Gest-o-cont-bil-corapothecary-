@@ -51,6 +51,8 @@ export interface LoadForRelease {
   hasImplant: boolean;
   /** Same-day Bowie-Dick result of the sterilizer; undefined when not performed. */
   equipmentBowieDick?: TestResult;
+  /** False for sterilizers where the Bowie-Dick test does not apply (only pre-vacuum steam). */
+  bowieDickApplies?: boolean;
   /** A decision a person already registered (e.g. sent to reprocessing). Kept as is. */
   manualStatus?: Extract<LoadStatus, 'reprocessamento' | 'rejeitada'>;
 }
@@ -73,7 +75,7 @@ export function evaluateLoadRelease(load: LoadForRelease, policy: LoadReleasePol
   const failed: string[] = [];
   const pending: string[] = [];
 
-  if (policy.requireDailyBowieDick) {
+  if (policy.requireDailyBowieDick && load.bowieDickApplies !== false) {
     if (load.equipmentBowieDick === 'reprovado') failed.push('Bowie-Dick do equipamento reprovado no dia.');
     else if (load.equipmentBowieDick !== 'aprovado') pending.push('Bowie-Dick do dia não registrado.');
   }

@@ -6,6 +6,7 @@ import type { CultureOutcome, Interpretation, ResistanceProfile } from './microb
 import type { DischargeOutcome, NoteKind, Sex } from './patient';
 import type { IrasContext } from './iras-workflow';
 import type { FollowupDto } from '../operations/dto';
+import type { SurgeryMaterialDto } from '../cme/dto';
 
 /**
  * Payloads exchanged by the API and the web client for the clinical modules. Patients are always
@@ -66,6 +67,8 @@ export interface SurgeryDetail extends SurgerySummary {
   notes: string | null; p75Minutes: number | null; p75Source: string | null; risk: RiskIndexResult; prophylaxis: ProphylaxisEvaluation;
   surveillance: { end: string; days: number } | null; cases: IrasCaseSummary[];
   dischargedAt: string | null; followups: FollowupDto[];
+  /** CME packages used in the surgery (backward traceability). */
+  materials: SurgeryMaterialDto[];
 }
 
 export interface SusceptibilityDto { antimicrobial: string; mic: string | null; interpretation: Interpretation }

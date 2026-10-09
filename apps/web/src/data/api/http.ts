@@ -20,19 +20,24 @@ function csrfToken(): string | null {
 export interface HttpClient {
   get<T>(path: string, query?: Record<string, string | number | undefined>): Promise<T>;
   send<T>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T>;
+  /** Raw file body: the server checks the real type from the content. */
+  upload<T>(path: string, file: File): Promise<T>;
 }
 
 export function createHttpClient(base: string, onUnauthorized: () => void): HttpClient {
-  async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function request<T>(method: string, path: string, body?: unknown, file?: File): Promise<T> {
     const headers: Record<string, string> = { accept: 'application/json' };
-    if (body !== undefined) headers['content-type'] = 'application/json';
+    if (file) {
+      headers['content-type'] = file.type || 'application/octet-stream';
+      headers['x-file-name'] = encodeURIComponent(file.name);
+    } else if (body !== undefined) headers['content-type'] = 'application/json';
     if (method !== 'GET') {
       const token = csrfToken();
       if (token) headers['x-csrf-token'] = token;
     }
     let res: Response;
     try {
-      res = await fetch(base + path, { method, headers, credentials: 'same-origin', body: body === undefined ? undefined : JSON.stringify(body) });
+      res = await fetch(base + path, { method, headers, credentials: 'same-origin', body: file ?? (body === undefined ? undefined : JSON.stringify(body)) });
     } catch {
       throw new ApiError(0, 'rede', 'Sem conexão com o servidor. Verifique a rede e tente novamente.');
     }
@@ -48,5 +53,6 @@ export function createHttpClient(base: string, onUnauthorized: () => void): Http
       return request('GET', qs ? `${path}?${qs}` : path);
     },
     send: (method, path, body) => request(method, path, body),
+    upload: (path, file) => request('POST', path, undefined, file),
   };
 }

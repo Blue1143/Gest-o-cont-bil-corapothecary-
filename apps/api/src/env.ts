@@ -21,6 +21,10 @@ const schema = z.object({
     .string()
     .refine((v) => Buffer.from(v, 'base64').length === 32, 'deve ter 32 bytes em base64')
     .optional(),
+  /** Directory for uploaded files, outside any web root (created with restricted permissions). */
+  UPLOAD_DIR: z.string().min(1).default('var/uploads'),
+  /** Maximum size of one uploaded file, in MB. */
+  UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(20).default(5),
   COOKIE_SECURE: z
     .enum(['true', 'false'])
     .default('true')

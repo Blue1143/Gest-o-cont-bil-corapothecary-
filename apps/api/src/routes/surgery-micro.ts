@@ -6,6 +6,7 @@ import {
   todayIn,
   type CultureDetail, type Paged, type SurgeryDetail, type SurgerySummary, type CultureSummary, type SurveillanceRow,
 } from '@ccih/domain';
+import { surgeryMaterials } from '../repositories/cme';
 import type { DB } from '../db/types';
 import { audit } from '../audit/audit';
 import { actorOf, requireAuth, requirePermission, type AuthContext } from '../http/auth';
@@ -108,6 +109,7 @@ export async function surgeryMicroRoutes(app: FastifyInstance, { db }: { db: Kys
       surveillance: surveillanceEnd(dateInZone(new Date(s.startedAt), tz), s.implant, { days: rules.surgery.surveillanceDays?.value, daysWithImplant: rules.surgery.surveillanceDaysWithImplant?.value }),
       cases: cases?.rows ?? [],
       dischargedAt: (await db.selectFrom('admission').select('discharged_at').where('id', '=', s.admissionId).executeTakeFirstOrThrow()).discharged_at?.toISOString() ?? null,
+      materials: await surgeryMaterials(db, id),
       followups: (await db.selectFrom('ssi_followup').selectAll().where('surgery_id', '=', id).orderBy('contacted_on', 'desc').execute()).map((f) => ({ id: f.id, contactedOn: f.contacted_on, method: f.method, outcome: f.outcome, notes: f.notes, caseId: f.case_id, by: f.recorded_by_name })),
     };
   });

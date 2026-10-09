@@ -46,8 +46,8 @@ export const NAVIGATION: NavGroup[] = [
   {
     label: 'CME',
     items: [
-      { path: '/cme', permissions: ['cme:view'], label: 'CME', phase: 5, summary: 'Ciclos, testes (Bowie-Dick, IQ classes 1–6, IB) e liberação de cargas.' },
-      { path: '/rastreabilidade', permissions: ['cme:view'], label: 'Rastreabilidade', phase: 5, summary: 'Lote → ciclo → carga → material → cirurgia → paciente, e o caminho inverso.' },
+      { path: '/cme', permissions: ['cme:view'], label: 'CME', phase: null, summary: 'Ciclos, testes (Bowie-Dick, IQ classes 1–6, IB) e liberação de cargas.' },
+      { path: '/rastreabilidade', permissions: ['cme:view'], label: 'Rastreabilidade', phase: null, summary: 'Lote → ciclo → carga → material → cirurgia → paciente, e o caminho inverso.' },
     ],
   },
   {

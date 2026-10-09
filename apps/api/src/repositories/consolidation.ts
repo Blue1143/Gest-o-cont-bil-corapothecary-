@@ -1,6 +1,6 @@
 import type { Kysely, Transaction } from 'kysely';
 import {
-  addDays, addMonths, consolidateClinicalFacts, consolidateOperationalFacts, dateInZone, rulesFromParameters, zonedInstant, OPERATIONAL_METRICS,
+  addDays, addMonths, consolidateClinicalFacts, consolidateCmeFacts, consolidateOperationalFacts, dateInZone, rulesFromParameters, zonedInstant, CME_METRICS, OPERATIONAL_METRICS,
   type CensusAdmission, type ConsolidationCase, type InvestigationStatus, type MetricKey,
 } from '@ccih/domain';
 import type { DB } from '../db/types';
@@ -108,8 +108,9 @@ export async function consolidateMonths(db: Db, institutionId: string, months: s
   });
 
   const operational = await loadOperationalFacts(db, institutionId, sorted, from, to, tz, rules.training.expiryWarningDays?.value);
-  const metrics = [...result.metrics, ...OPERATIONAL_METRICS];
-  const values = [...result.rows, ...operational].flatMap((row) =>
+  const cme = await loadCmeFacts(db, institutionId, sorted, from, to, tz);
+  const metrics = [...result.metrics, ...OPERATIONAL_METRICS, ...CME_METRICS];
+  const values = [...result.rows, ...operational, ...cme].flatMap((row) =>
     Object.entries(row.counts)
       .filter(([metric]) => metrics.includes(metric as MetricKey))
       .map(([metric, value]) => ({ institution_id: institutionId, period: row.period, sector_id: row.sectorId, metric, value: value!, data_origin: inst.data_origin, consolidated_at: now })),
@@ -117,6 +118,37 @@ export async function consolidateMonths(db: Db, institutionId: string, months: s
   await db.deleteFrom('indicator_fact').where('institution_id', '=', institutionId).where('period', 'in', sorted).where('metric', 'in', metrics).execute();
   for (let i = 0; i < values.length; i += 1000) await db.insertInto('indicator_fact').values(values.slice(i, i + 1000)).execute();
   return { months: sorted, rows: values.length, metrics, skipped: result.skipped, origin: inst.data_origin };
+}
+
+/** CME cycles, tests, loads, package traceability and CME non-conformities. */
+async function loadCmeFacts(db: Db, institutionId: string, months: string[], from: Date, to: Date, tz: string) {
+  const [loads, tests, uses, ncs, cmeSector] = await Promise.all([
+    db.selectFrom('sterilization_load as l').innerJoin('sterilizer as s', 's.id', 'l.sterilizer_id')
+      .select((eb) => ['l.started_at', 's.sector_id', 'l.physical_result', 'l.status',
+        eb.exists(eb.selectFrom('load_release_decision as d').select('d.id').whereRef('d.load_id', '=', 'l.id').where('d.to_status', '=', 'retida')).as('retained')])
+      .where('l.institution_id', '=', institutionId).where('l.started_at', '>=', from).where('l.started_at', '<', to).execute(),
+    db.selectFrom('sterilization_test as t').innerJoin('sterilizer as s', 's.id', 't.sterilizer_id')
+      .select(['t.id', 't.replaces_id', 't.performed_on', 't.type', 't.result', 's.sector_id'])
+      .where('t.institution_id', '=', institutionId).where('t.performed_on', '>=', months[0]!).where('t.performed_on', '<', addMonths(months.at(-1)!, 1)).execute(),
+    db.selectFrom('material_use as u').innerJoin('load_item as i', 'i.id', 'u.item_id').innerJoin('sterilization_load as l', 'l.id', 'i.load_id').innerJoin('sterilizer as s', 's.id', 'l.sterilizer_id')
+      .select(['u.used_at', 'u.surgery_id', 's.sector_id'])
+      .where('u.institution_id', '=', institutionId).where('u.voided_at', 'is', null).where('i.set_id', 'is not', null).where('u.used_at', '>=', from).where('u.used_at', '<', to).execute(),
+    db.selectFrom('nonconformity').select(['detected_on', 'sector_id']).where('institution_id', '=', institutionId).where('origin', '=', 'cme')
+      .where('detected_on', '>=', months[0]!).where('detected_on', '<', addMonths(months.at(-1)!, 1)).execute(),
+    db.selectFrom('sector').select('id').where('institution_id', '=', institutionId).where('kind', '=', 'cme').orderBy('code').executeTakeFirst(),
+  ]);
+  // A reading or correction made later replaces the test it points to (only the current version counts).
+  const replaced = new Set((tests.length ? await db.selectFrom('sterilization_test').select('replaces_id').where('replaces_id', 'in', tests.map((t) => t.id)).execute() : []).map((r) => r.replaces_id));
+  return consolidateCmeFacts({
+    months,
+    loads: loads.map((l) => ({ date: dateInZone(l.started_at, tz), sectorId: l.sector_id, physical: l.physical_result, status: l.status, everRetained: !!l.retained })),
+    tests: tests.filter((t) => !replaced.has(t.id)).map((t) => ({ date: t.performed_on, sectorId: t.sector_id, type: t.type, result: t.result })),
+    setUses: uses.map((u) => ({ date: dateInZone(u.used_at, tz), sectorId: u.sector_id, traced: !!u.surgery_id })),
+    nonconformities: ncs.flatMap((n) => {
+      const sectorId = n.sector_id ?? cmeSector?.id;
+      return sectorId ? [{ date: n.detected_on, sectorId }] : [];
+    }),
+  });
 }
 
 /** Bundles, hand hygiene, alcohol consumption and training coverage (voided records excluded). */

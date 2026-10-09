@@ -11,6 +11,7 @@ import { actorOf, requireAuth, requirePermission, type AuthContext } from '../ht
 import { HttpError, conflict, notFound, parse } from '../http/errors';
 import { Instant, IsoDate, Justification, OptionalText, RowVersion, Text, Uuid, notFuture } from '../http/schemas';
 import { assertSector, institutionOrigin } from '../repositories/clinical';
+import { attachmentsFor } from '../services/attachments';
 
 const TrainingBody = z
   .object({
@@ -131,6 +132,8 @@ export async function trainingSupplyRoutes(app: FastifyInstance, { db }: { db: K
       .select((eb) => ['s.id', 's.training_id', 's.held_on', 's.instructor', 's.hours', 's.sector_id', 's.notes', 's.data_origin',
         eb.selectFrom('training_attendance').select((e) => e.fn.countAll<string>().as('n')).whereRef('training_attendance.session_id', '=', 's.id').where('training_attendance.present', '=', true).as('attendees')])
       .where('t.institution_id', '=', auth.institutionId).orderBy('s.held_on', 'desc').limit(200).execute();
+    const visibleSessions = sessions.filter((s) => !auth.scope || s.sector_id == null || auth.scope.includes(s.sector_id));
+    const files = await attachmentsFor(db, 'training_session', visibleSessions.map((s) => s.id));
     return {
       trainings: trainings.map((t) => {
         const req_ = mine.filter((r) => r.trainingId === t.id);
@@ -140,7 +143,7 @@ export async function trainingSupplyRoutes(app: FastifyInstance, { db }: { db: K
           covered: req_.filter((r) => r.state === 'valido' || r.state === 'vencendo').length, expiring: req_.filter((r) => r.state === 'vencendo').length, overdue: req_.filter((r) => r.state === 'vencido' || r.state === 'pendente').length,
         };
       }),
-      sessions: sessions.filter((s) => !auth.scope || s.sector_id == null || auth.scope.includes(s.sector_id)).map((s) => ({ id: s.id, trainingId: s.training_id, heldOn: s.held_on, instructor: s.instructor, hours: Number(s.hours), sectorId: s.sector_id, notes: s.notes, attendees: Number(s.attendees ?? 0), origin: s.data_origin })),
+      sessions: visibleSessions.map((s) => ({ id: s.id, trainingId: s.training_id, heldOn: s.held_on, instructor: s.instructor, hours: Number(s.hours), sectorId: s.sector_id, notes: s.notes, attendees: Number(s.attendees ?? 0), origin: s.data_origin, attachments: files.get(s.id) ?? [] })),
     };
   });
 

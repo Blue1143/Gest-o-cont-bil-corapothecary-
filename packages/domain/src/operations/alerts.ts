@@ -9,7 +9,8 @@ import type { StockEvaluation } from '../rules/operations';
  */
 export type AlertKind =
   | 'iras_investigacao_atrasada' | 'dispositivo_prolongado' | 'mdr_novo' | 'treinamento_vencido'
-  | 'insumo_critico' | 'plano_acao_atrasado' | 'isc_contato_pendente';
+  | 'insumo_critico' | 'plano_acao_atrasado' | 'isc_contato_pendente'
+  | 'cme_carga_recolhida' | 'cme_liberada_com_falha' | 'cme_bowie_dick_reprovado' | 'cme_ib_leitura_atrasada' | 'cme_qualificacao';
 
 export type AlertPriority = 'alta' | 'media' | 'baixa';
 export type AlertStatus = 'aberto' | 'assumido' | 'encerrado';
@@ -22,6 +23,11 @@ export const ALERT_KIND_LABEL: Record<AlertKind, string> = {
   insumo_critico: 'Insumo em situação crítica',
   plano_acao_atrasado: 'Ação de plano 5W2H atrasada',
   isc_contato_pendente: 'Vigilância pós-alta de ISC sem contato',
+  cme_carga_recolhida: 'Carga da CME recolhida após uso',
+  cme_liberada_com_falha: 'Carga liberada com teste reprovado',
+  cme_bowie_dick_reprovado: 'Bowie-Dick reprovado com equipamento em uso',
+  cme_ib_leitura_atrasada: 'Indicador biológico sem leitura no prazo',
+  cme_qualificacao: 'Qualificação de equipamento da CME',
 };
 export const ALERT_PRIORITY_LABEL: Record<AlertPriority, string> = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
 export const ALERT_STATUS_LABEL: Record<AlertStatus, string> = { aberto: 'Aberto', assumido: 'Assumido', encerrado: 'Encerrado' };
@@ -30,6 +36,7 @@ export const ALERT_STATUS_LABEL: Record<AlertStatus, string> = { aberto: 'Aberto
 export const ALERT_KIND_PERMISSION: Record<AlertKind, Permission> = {
   iras_investigacao_atrasada: 'iras:view', dispositivo_prolongado: 'patient:view', mdr_novo: 'micro:view', treinamento_vencido: 'quality:view',
   insumo_critico: 'quality:view', plano_acao_atrasado: 'quality:view', isc_contato_pendente: 'surgery:view',
+  cme_carga_recolhida: 'cme:view', cme_liberada_com_falha: 'cme:view', cme_bowie_dick_reprovado: 'cme:view', cme_ib_leitura_atrasada: 'cme:view', cme_qualificacao: 'cme:view',
 };
 
 export interface AlertCandidate {
@@ -43,11 +50,18 @@ export interface AlertCandidate {
   sectorId: string | null;
   /** Screen where the alert is handled. */
   link: string | null;
+  /**
+   * An event (not a lasting condition): once an alert with this key is closed it is never
+   * recreated, even after the suppression window, while the event is still recent.
+   */
+  oneShot?: boolean;
 }
 
 export interface AlertRules {
   investigationOverdueDays: number | undefined;
   deviceReviewDays: number | undefined;
+  ibReadingHours?: number | undefined;
+  qualificationWarningDays?: number | undefined;
 }
 
 export interface AlertInput {
@@ -60,6 +74,17 @@ export interface AlertInput {
   supplies: Array<{ id: string; name: string; evaluation: StockEvaluation }>;
   overdueActions: Array<{ id: string; ncId: string; what: string; dueOn: IsoDate; sectorId: string | null }>;
   pendingFollowups: Array<{ surgeryId: string; procedure: string; patientLabel: string; windowEnd: IsoDate }>;
+  cme?: {
+    /** Loads recalled (rejected after release) in the last days, with the exposure found. */
+    recalledLoads: Array<{ loadId: string; code: string; surgeries: number; patients: number; sectorId: string }>;
+    /** Released loads whose current tests now fail the policy (e.g. a positive IB read later). */
+    releasedWithFailure: Array<{ loadId: string; code: string; reason: string; sectorId: string }>;
+    /** Sterilizers still in use whose latest Bowie-Dick of the day failed. */
+    failedBowieDick: Array<{ sterilizerId: string; name: string; sectorId: string }>;
+    /** Pending biological indicators with the hours since incubation started. */
+    pendingIb: Array<{ testId: string; loadId: string; loadCode: string; hours: number; sectorId: string }>;
+    qualifications: Array<{ sterilizerId: string; name: string; dueOn: IsoDate; sectorId: string }>;
+  };
 }
 
 export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
@@ -78,7 +103,7 @@ export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
     }
   }
   for (const m of input.newMdr) {
-    out.push({ kind: 'mdr_novo', dedupKey: `mdr:${m.isolateId}`, priority: 'alta', title: `${m.organism} multirresistente`, detail: `Paciente ${m.patientLabel}, coleta em ${m.collectedOn.split('-').reverse().join('/')}. Verificar precauções conforme protocolo institucional.`, entity: 'isolate', entityId: m.isolateId, sectorId: m.sectorId, link: `/microbiologia/${m.cultureId}` });
+    out.push({ kind: 'mdr_novo', oneShot: true, dedupKey: `mdr:${m.isolateId}`, priority: 'alta', title: `${m.organism} multirresistente`, detail: `Paciente ${m.patientLabel}, coleta em ${m.collectedOn.split('-').reverse().join('/')}. Verificar precauções conforme protocolo institucional.`, entity: 'isolate', entityId: m.isolateId, sectorId: m.sectorId, link: `/microbiologia/${m.cultureId}` });
   }
   for (const t of input.trainingGaps) {
     if (t.overdue <= 0) continue;
@@ -93,6 +118,33 @@ export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
   }
   for (const f of input.pendingFollowups) {
     out.push({ kind: 'isc_contato_pendente', dedupKey: `isc:${f.surgeryId}`, priority: 'baixa', title: `${f.procedure}: sem contato pós-alta`, detail: `Paciente ${f.patientLabel}. Janela de vigilância até ${f.windowEnd.split('-').reverse().join('/')}.`, entity: 'surgery', entityId: f.surgeryId, sectorId: null, link: `/cirurgias/${f.surgeryId}` });
+  }
+  if (input.cme) {
+    for (const l of input.cme.recalledLoads) {
+      const exposure = l.surgeries ? `${l.patients} paciente(s) em ${l.surgeries} cirurgia(s) receberam material da carga: avaliar com a CCIH a necessidade de vigilância.` : 'Nenhum material desta carga foi registrado em uso.';
+      out.push({ kind: 'cme_carga_recolhida', oneShot: true, dedupKey: `recolhe:${l.loadId}`, priority: l.surgeries ? 'alta' : 'media', title: `Carga ${l.code} recolhida`, detail: exposure, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });
+    }
+    for (const l of input.cme.releasedWithFailure) {
+      out.push({ kind: 'cme_liberada_com_falha', dedupKey: `falha:${l.loadId}`, priority: 'alta', title: `Carga ${l.code} liberada com teste reprovado`, detail: `${l.reason} Avaliar o recolhimento dos pacotes e a exposição de pacientes.`, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });
+    }
+    for (const b of input.cme.failedBowieDick) {
+      out.push({ kind: 'cme_bowie_dick_reprovado', dedupKey: `bd:${b.sterilizerId}:${input.today}`, priority: 'alta', title: `${b.name}: Bowie-Dick reprovado hoje`, detail: 'Bloquear o equipamento (manutenção) ou repetir o teste com aprovação antes de novas cargas.', entity: 'sterilizer', entityId: b.sterilizerId, sectorId: b.sectorId, link: '/cme/equipamentos' });
+    }
+    const limit = input.rules.ibReadingHours;
+    if (limit != null) {
+      for (const t of input.cme.pendingIb) {
+        if (t.hours < limit) continue;
+        out.push({ kind: 'cme_ib_leitura_atrasada', dedupKey: `ib:${t.testId}`, priority: 'media', title: `Carga ${t.loadCode}: indicador biológico sem leitura há ${Math.floor(t.hours)} h`, detail: `Prazo institucional: ${limit} h após o início da incubação.`, entity: 'sterilization_test', entityId: t.testId, sectorId: t.sectorId, link: `/cme/cargas/${t.loadId}` });
+      }
+    }
+    const warn = input.rules.qualificationWarningDays;
+    if (warn != null) {
+      for (const q of input.cme.qualifications) {
+        const days = dayDiff(input.today, q.dueOn);
+        if (days > warn) continue;
+        out.push({ kind: 'cme_qualificacao', dedupKey: `qualif:${q.sterilizerId}:${q.dueOn}`, priority: days < 0 ? 'alta' : 'baixa', title: days < 0 ? `${q.name}: qualificação vencida` : `${q.name}: qualificação vence em ${days} dia(s)`, detail: `Vencimento em ${q.dueOn.split('-').reverse().join('/')}.`, entity: 'sterilizer', entityId: q.sterilizerId, sectorId: q.sectorId, link: '/cme/equipamentos' });
+      }
+    }
   }
   return out;
 }

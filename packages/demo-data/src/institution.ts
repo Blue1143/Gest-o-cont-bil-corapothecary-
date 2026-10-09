@@ -23,6 +23,8 @@ export const DEMO_REFERENCES: ClinicalReference[] = [
     'Horário do censo usado para paciente-dia e dispositivo-dia (denominadores dos indicadores).'),
   pending('ref-procedimento-alertas', 'Procedimento institucional da central de alertas da CCIH', 'protocolo_institucional', 'Procedimento da instituição (modelo de demonstração)',
     'Prazos que geram alertas e tempo de supressão após o encerramento (controle de excesso de alertas).'),
+  pending('ref-procedimento-cme', 'Procedimento operacional da CME', 'protocolo_institucional', 'Procedimento da instituição (modelo de demonstração)',
+    'Validade da esterilização por embalagem, prazo de leitura do indicador biológico (conforme o fabricante do indicador) e antecedência do alerta de qualificação dos equipamentos.'),
   pending('ref-protocolo-stewardship', 'Programa de gerenciamento do uso de antimicrobianos', 'protocolo_institucional', 'Programa da instituição (modelo de demonstração)',
     'Gatilhos de revisão de prescrição.'),
 ];
@@ -73,6 +75,11 @@ export const DEMO_CONFIG: InstitutionalConfig = {
       investigationOverdueDays: param(7, 'ref-procedimento-alertas'),
       deviceReviewDays: param(10, 'ref-procedimento-alertas'),
       suppressHours: param(24, 'ref-procedimento-alertas'),
+    },
+    cme: {
+      shelfLifeDays: param(30, 'ref-procedimento-cme'),
+      ibReadingHours: param(48, 'ref-procedimento-cme'),
+      qualificationWarningDays: param(30, 'ref-procedimento-cme'),
     },
   },
 };

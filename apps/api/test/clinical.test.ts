@@ -124,7 +124,7 @@ describe('IRAS surveillance workflow', () => {
   it('registers a suspicion linked to the admission device', async () => {
     const adm = await ctx.db.selectFrom('admission').innerJoin('device_use', 'device_use.admission_id', 'admission.id').innerJoin('admission_movement as m', 'm.admission_id', 'admission.id')
       .select(['admission.id', 'device_use.id as device_id', 'm.sector_id']).where('admission.discharged_at', 'is', null).where('device_use.device_type', '=', 'CVC').where('m.end_at', 'is', null)
-      .where('device_use.inserted_at', '<', new Date(Date.now() - 4 * 86_400_000)).executeTakeFirstOrThrow();
+      .where('device_use.inserted_at', '<', new Date(Date.now() - 4 * 86_400_000)).where('device_use.removed_at', 'is', null).orderBy('device_use.inserted_at').executeTakeFirstOrThrow();
     admissionId = adm.id;
     deviceId = adm.device_id;
     const today = new Date().toISOString().slice(0, 10);

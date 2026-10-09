@@ -128,8 +128,10 @@ describe('alert center', () => {
 
   it('shows each kind only to profiles of its module', async () => {
     const cme = await login(ctx.app, 'cme');
-    const rows = (await api(cme, 'GET', '/alerts?pageSize=100')).json().rows;
-    expect(rows).toEqual([]);
+    const rows = (await api(cme, 'GET', '/alerts?pageSize=100')).json().rows as { kind: string }[];
+    // The CME profile sees only the CME alerts (no patient, IRAS, training or supply alerts).
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((a) => a.kind.startsWith('cme_'))).toBe(true);
   });
 });
 

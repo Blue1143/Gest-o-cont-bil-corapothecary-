@@ -119,3 +119,19 @@ a { color: var(--primary); }
 .bar-track { display: inline-block; width: 100px; height: 8px; border-radius: 4px; background: var(--surface-sunken); vertical-align: middle; overflow: hidden; margin-right: 8px; }
 .check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px var(--space-4); max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); }
 .check-grid label { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+
+/* CME */
+.cme-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); margin: 0; }
+.cme-stats > div { background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); }
+.cme-stats dt { font-size: var(--text-label-size); color: var(--ink-muted); }
+.cme-stats dd { margin: 4px 0 0; font-size: 24px; font-weight: 600; color: var(--ink); }
+.cme-equipment { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-3); }
+.cme-equipment li { display: flex; flex-direction: column; gap: 6px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); }
+.cme-items { border: 1px solid var(--line); border-radius: var(--radius-md); padding: var(--space-3); margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.cme-items legend { font-weight: 600; padding: 0 4px; }
+.cme-item-row { align-items: flex-end; }
+.inline-check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; min-height: var(--control-md); }
+.cme-files { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cme-file-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.cme-file-list a { overflow-wrap: anywhere; }
+.cme-bd-grid td, .cme-bd-grid th { white-space: nowrap; }
