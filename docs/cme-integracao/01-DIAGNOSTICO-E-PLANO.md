@@ -358,6 +358,17 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 
 ---
 
+## 3.1 Decisões aprovadas (09/10/2026)
+
+| # | Decisão | Aplicação |
+| --- | --- | --- |
+| 1 | Etiqueta do pacote impressa na **montagem da carga** | A carga passa a ter a fase "em montagem" (antes do início do ciclo); cada pacote lido na montagem recebe a etiqueta com lote/ciclo e validade |
+| 2 | Etapas obrigatórias: todas, exceto **armazenamento** e **separação**, que são configuráveis | `cme_flow_config.storage_required` / `separation_required` |
+| 3 | Uso cirúrgico sem saída registrada: **alerta** durante um período de transição configurável | `cme_flow_config.exit_required_from`: vazio = só alerta; com data = bloqueio a partir dela |
+| 4 | Sem operação offline até existir política institucional | A estação sem conexão avisa e não aceita leituras; liberação nunca é offline |
+| 5 | Antivírus **somente quando disponível** | Sem scanner configurado, o arquivo fica "não verificado" (sinalizado, nunca exibido como aprovado); com scanner, só fica disponível após resultado "limpo" |
+| 6 | Code 128 para códigos emitidos; leitura de Code 39 legado; sem QR Code. **Sem leitor, conferência manual no sistema** | O modo manual é oficial por estação: o operador localiza e confirma o item; o servidor aplica as mesmas regras e o evento fica marcado como `manual` |
+
 ## 4. Dependências externas e aprovações institucionais
 
 **Hardware e fornecedores:**
