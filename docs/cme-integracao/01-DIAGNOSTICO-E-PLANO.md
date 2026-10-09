@@ -1,0 +1,396 @@
+# Complemento CME + CCIH — Diagnóstico do repositório e plano de execução
+
+Data: 09/10/2026 · Base: commit `274596e` (Fases 1–5) · Situação: **Fases A (diagnóstico) e B (projeto técnico)**. Nenhuma migração foi criada ou executada nesta etapa.
+
+Legenda: **Existe** = implementado e testado · **Parcial** = existe base reaproveitável, falta parte do requisito · **Falta** = não há implementação.
+
+---
+
+## 1. Diagnóstico
+
+### 1.1 Infraestrutura e arquitetura atuais
+
+| Item | Situação | Evidência |
+| --- | --- | --- |
+| Hospedagem | **Não definida no repositório.** Não há Dockerfile, IaC nem configuração de provedor. O README descreve: SPA estática + API Node (`apps/api/dist/server.js`) + PostgreSQL 16 atrás de proxy reverso com TLS. CI no GitHub Actions com PostgreSQL efêmero. | `README.md` (Build e deploy), `.github/workflows/ci.yml` |
+| Banco | PostgreSQL 16; papel dono (migrações) e papel de aplicação (DML, sem UPDATE/DELETE em tabelas somente inserção, com triggers). Migrações versionadas (`0001`–`0004`). | `apps/api/src/db/migrate.ts`, `migrations/` |
+| Separação de dados | `institution_id` em todas as tabelas de negócio; escopo do usuário **por setor** (`user_scope`, `scope_all`). Não há escopo explícito por **unidade** (unidade é inferida pelos setores). Sem RLS no banco: o isolamento é aplicado nas consultas da API. | `0001_foundation.ts`, `repositories/clinical.ts` (`scopeIds`) |
+| Auditoria | `audit_log` somente inserção com cadeia de hashes, gravado na mesma transação. | `apps/api/src/audit/audit.ts` |
+| Tempo real | **Falta.** Só há atualização periódica (TanStack Query `refetchInterval: 120 s`) na lista e no contador de alertas. Nenhum SSE/WebSocket/LISTEN-NOTIFY. | `features/operations/AlertsPage.tsx` |
+| Fila/outbox | **Falta.** Não há fila persistente nem padrão outbox. | — |
+| Segredos | Somente por variáveis de ambiente validadas (`env.ts`); `.env.example` sem valores reais. Sem integração com cofre de segredos. | `apps/api/src/env.ts` |
+
+### 1.2 CME — rastreabilidade e etapas
+
+| Requisito | Situação | Detalhe |
+| --- | --- | --- |
+| Etapas operacionais (1–11) | **Falta** (7 parcial) | `processing_step` **não existe** (só no modelo-alvo do `DATA_MODEL.md`). O rastreio começa na **montagem da carga**: `load_item` nasce junto com `sterilization_load`. Não há recepção, limpeza, inspeção, preparo, embalagem, armazenamento, separação, distribuição nem devolução. A avaliação/liberação (etapa 7) **existe**. |
+| Identidade física do material | **Parcial** | `instrument_set` é um **tipo** de caixa (catálogo), não a caixa física. Não há identificador permanente de cada caixa/instrumental, então não é possível acompanhar a mesma caixa entre reprocessamentos. |
+| Código do pacote | **Parcial** | `load_item.label_code` (`<carga>-<nn>`, único por instituição) é gerado pelo sistema e aceito no uso cirúrgico e na pesquisa. Não há prefixo de tipo nem configuração de formatos. |
+| Leitores de código de barras | **Falta** | Só campos de texto (`SurgeryMaterials.tsx`, `TracePage.tsx`). Não há cadastro de leitores/estações, modo de captura HID, câmera, nem registro de estação ou de método de entrada. |
+| Validação de leitura | **Parcial** | `checkItemUse` (carga liberada, validade, uso único) e o índice único parcial `material_use_item_idx` cobrem o **uso**. Falta para todas as outras etapas, com resultado tipificado (código desconhecido, etapa incorreta, duplicidade etc.). |
+| Registro de eventos de leitura | **Falta** | `material_use` registra o uso, não cada leitura; leituras recusadas não ficam registradas (só no log técnico). |
+| Saída do CME / destino | **Falta** | O uso é registrado direto na cirurgia ou no setor (`/cme/uses`), sem saída, conferência ou destino. |
+| Devolução / reentrada | **Parcial** | Reprocessamento de **carga** existe (`reprocessed_from_id`); devolução de pacote não usado e reentrada do material, não. |
+
+### 1.3 Integrações, etiquetas, anexos
+
+| Requisito | Situação | Detalhe |
+| --- | --- | --- |
+| Integração hospitalar (estoque, centro cirúrgico, internação, prontuário) | **Falta** | Nenhum adaptador. Só a coluna `culture.origin` (`manual`/`lis`) antecipa a integração com o laboratório. Não há mapeamento de códigos externos, inbox/outbox, idempotência nem registro de mensagens. |
+| HL7/FHIR | **Falta** | Nenhuma dependência ou contrato. Nenhum endpoint de fornecedor documentado no repositório. |
+| Geração e impressão de etiquetas | **Falta** | Nenhuma biblioteca ou gerador de código de barras, nenhum layout, nenhuma reimpressão auditada. Hoje o código é **só texto**. |
+| Anexos | **Parcial** | Tipo pelo conteúdo, PDF ativo recusado, limite, disco fora da raiz web (permissões 700/600), download auditado (`services/attachments.ts`). **Falta**: antimalware, estado de verificação, criptografia em repouso na aplicação, armazenamento de objetos, URLs temporárias. |
+| Importação de ciclos dos equipamentos | **Falta** | O registro físico é digitado (`POST /cme/loads/:id/cycle`). |
+
+### 1.4 Alertas, fluxo, correção, parâmetros
+
+| Requisito | Situação | Detalhe |
+| --- | --- | --- |
+| Central de alertas | **Parcial** | `alert` com deduplicação, supressão, eventos que não reabrem (`oneShot`), assumir/encerrar com resolução, visibilidade por permissão, filtros por situação/prioridade/tipo/"meus". **Falta**: categoria (erro operacional, violação de sequência, pendência por tempo, falha técnica, falta de informação, não conformidade, segurança), gravidade "crítica", prazo, distinção **visualizar / reconhecer / resolver / encerrar**, histórico de ações, filtros por unidade, setor e período, e alertas de bloqueio que não podem ser encerrados enquanto a condição persiste. |
+| Alertas de quebra de processo | **Falta** (parcial em 4 casos) | Existem: carga recolhida, carga liberada com teste reprovado, Bowie-Dick reprovado com equipamento em uso, IB sem leitura, qualificação. Faltam os demais (material parado, etapa pulada, estação incompatível, saída sem liberação, ciclo aguardando decisão, leituras inválidas repetidas, falha de sincronização, divergência de estado). |
+| Bloqueio de operação no servidor | **Parcial** | Já bloqueados: liberar sem a política permitir, ciclo em equipamento em manutenção, uso de pacote não liberado/vencido/já usado, segunda leitura de teste. Falta para as etapas novas e a **exceção autorizada** (permissão própria + justificativa + auditoria). |
+| Correção versionada do ciclo | **Falta** | O fim do ciclo grava uma vez e recusa nova gravação (409). **Padrão reaproveitável**: versões de teste com `replaces_id` + justificativa (`sterilization_test`), versões de resultado de cultura, histórico de decisões com política aplicada. |
+| Parâmetros governados | **Parcial** | `rule_parameter` tem valor, referência, `approved_by` e `row_version`; o histórico só existe no `audit_log`. **Problema**: o `approved_by` é preenchido por quem **edita** (edição = aprovação). Faltam unidade/contexto explícitos, vigência, versão consultável, situação de validação própria e separação **propor × aprovar**. A política de liberação tem o mesmo problema. A tela já marca "Valor inicial (demonstração)" e "Requer validação institucional" quando a referência não está validada. |
+
+### 1.5 Testes existentes reaproveitáveis
+
+Domínio (67), dados sintéticos (13), componentes (14), web (35), API com PostgreSQL real (71), E2E Playwright (6). Os testes de CME (`apps/api/test/cme.test.ts`, `packages/domain/src/cme/cme.test.ts`, `e2e/cme.spec.ts`) são a base de regressão.
+
+---
+
+## 2. Projeto técnico (Fase B)
+
+### 2.1 Modelo de rastreabilidade proposto
+
+Três identidades, cada uma com código de barras próprio e sem ambiguidade:
+
+| Identidade | O que é | Código | Quando nasce |
+| --- | --- | --- | --- |
+| **Ativo** (`instrument_asset`) | Caixa ou instrumental físico rastreável (ex.: "Caixa de laparotomia nº 3"), ligado ao tipo `instrument_set` existente | Permanente, impresso em etiqueta durável. Prefixo `AT-` | Cadastro do ativo |
+| **Processo** (`cme_process`) | Um ciclo completo de reprocessamento de um ativo (ou de material avulso), da recepção à distribuição/devolução | Ativo: o próprio código do ativo. Avulso: etiqueta de recepção `PR-` | Recepção (etapa 1) |
+| **Pacote** (`load_item`, existente) | O pacote estéril | `label_code` atual (`<carga>-<nn>`); os códigos antigos continuam válidos | Montagem da carga (etapa 6), com impressão da etiqueta de esterilização (lote/ciclo/validade) |
+
+Cadeia: **ativo → processo → (recepção … embalagem) → pacote → carga → ciclo → testes → decisão → armazenamento → separação → saída (setor de destino) → uso (cirurgia → paciente) → devolução → novo processo**.
+
+Migração compatível: `load_item.process_id` **opcional**. Pacotes anteriores ficam marcados na interface como "rastreio iniciado no ciclo (registro anterior)". Nada é apagado ou reescrito.
+
+### 2.2 Etapas e estados
+
+`processing_step` passa a existir como **lista fixa no domínio** (não editável, para não quebrar regras):
+
+1. `recepcao` · 2. `limpeza` · 3. `inspecao` · 4. `preparo` · 5. `embalagem` · 6. `esterilizacao` · 7. `liberacao` · 8. `armazenamento` · 9. `separacao` · 10. `distribuicao` · 11. `devolucao`
+
+Estados do processo (separados da etapa): `em_processo`, `bloqueado`, `liberado`, `distribuido`, `devolvido`, `encerrado`, `descartado`.
+
+- As transições permitidas ficam numa tabela `PROCESS_FLOW` no domínio, por exemplo: inspeção reprovada volta para limpeza ou vai para descarte; devolução abre um novo processo na recepção.
+- Etapas obrigatórias: 1–7 e 10 sempre; 8 e 9 conforme a configuração da instituição. Isso é **parâmetro institucional, não decisão do desenvolvedor**.
+- As etapas 6 e 7 reaproveitam carga, ciclo, testes e decisão existentes: o estado do processo é **derivado** da carga, sem duplicar.
+
+### 2.3 Leitores e estações
+
+**`scan_station`** — cadastro de estações e pontos de leitura. Campos:
+- instituição, unidade, setor, localização e nome;
+- etapas e operações permitidas;
+- habilitada;
+- símbolos aceitos (`code128`, `code39`, `qr`, `datamatrix`);
+- métodos aceitos (`hid`, `camera`, `digitado`);
+- identificador do dispositivo, opcional e **sem presumir número de série**;
+- `last_seen_at`;
+- responsável padrão.
+
+**Vínculo da estação ao computador:**
+- Um perfil autorizado "pareia" o navegador da estação.
+- O servidor emite um token aleatório e guarda só o hash; o token vai num cookie `HttpOnly` próprio da estação.
+- Assim a estação de cada evento é **conhecida pelo servidor**, não declarada pelo cliente.
+- O usuário continua sendo o da sessão autenticada.
+
+**Captura:**
+- **HID (teclado)**: componente `ScanInput` que mantém o foco e detecta o padrão de leitor (intervalo entre teclas e terminador Enter/Tab configuráveis, prefixo/sufixo opcionais). Ele distingue leitura de digitação manual, e cada evento registra `input_method`.
+- **Câmera** (dispositivos móveis): `BarcodeDetector` do navegador quando disponível, sem dependência externa. Onde não houver suporte, a câmera fica indisponível e isso é informado.
+- **Digitação manual**: permitida conforme configuração da estação, e marcada no evento. Exigir justificativa é um parâmetro institucional.
+- **Leitores com interface própria** (serial, SDK): fora do escopo até haver modelo e documentação do fabricante. A camada de captura fica preparada para um adaptador.
+
+**Formatos (`barcode_format`):**
+- Cada formato tem nome, simbologia, expressão regular, tipo de entidade, origem (sistema/hospital/fornecedor), prefixo e se está habilitado.
+- O sistema reconhece os próprios códigos pelos prefixos (`AT-`, `PR-`) e pelo padrão de pacote atual.
+- Códigos de terceiros só são aceitos se cadastrados e resolvidos por `external_identifier`.
+
+### 2.4 Evento de leitura e serviço de transição
+
+**`cme_scan_event`** (somente inserção) guarda:
+- id e chave de idempotência (`client_event_id`, único por estação);
+- código lido, tipo detectado, ativo/processo/pacote/carga resolvidos;
+- etapa e operação solicitada;
+- **resultado**: `aceita`, `codigo_desconhecido`, `etapa_incorreta`, `duplicada`, `bloqueado`, `carga_nao_liberada`, `destino_incompativel`, `requer_conferencia`, `excecao_autorizada`;
+- usuário, estação, `input_method`;
+- `server_at` (relógio do servidor) e `device_at` (informado, só como referência);
+- origem e destino;
+- justificativa;
+- `previous_event_id` e o processo relacionado.
+
+**Serviço único `scan(...)`**, executado numa transação com trava pelo processo/pacote:
+1. Normaliza e identifica o código (formato → entidade).
+2. Confirma se foi emitido pelo sistema ou está mapeado.
+3. Carrega o estado atual.
+4. Valida a etapa/operação contra a estação e o `PROCESS_FLOW`.
+5. Verifica bloqueios (carga, recolhimento, validade, equipamento, alertas de segurança).
+6. Grava o evento, **sempre, inclusive quando recusado**.
+7. Só então avança o estado.
+8. Grava no outbox.
+9. Devolve um resultado tipificado em português para o operador.
+
+**Regra central:** uma leitura com formato válido **nunca** autoriza movimento sozinha.
+
+**Exceção autorizada:**
+- Nova permissão `cme:override`, com justificativa obrigatória.
+- Gera evento `excecao_autorizada`, alerta de categoria *segurança* e entrada no `audit_log`.
+
+### 2.5 Alertas (evolução da Central existente, sem criar outra)
+
+**Novas colunas em `alert`:**
+- `category`: `erro_operacional`, `violacao_sequencia`, `pendencia_tempo`, `falha_integracao`, `informacao_obrigatoria`, `nao_conformidade`, `seguranca`;
+- gravidade `critica` (somada a alta/média/baixa);
+- `step`, `due_at`, `unit_id`;
+- `acknowledged_at/by`, `resolved_at/by`;
+- `blocking` (bloqueio de segurança).
+
+**`alert_action`** (somente inserção) registra cada ação: criado, visualizado, reconhecido, assumido, comentado, resolvido, encerrado, reaberto, exceção.
+
+**Regras:**
+- Visualizar não muda a situação.
+- Um alerta `blocking` não pode ser encerrado enquanto a condição persistir; a saída é resolver a causa ou uma exceção formal.
+
+**Regras de quebra de processo** (em `collectCandidates`), com prazos em `rule_parameter` (grupo `cme`):
+- **Sem prazo configurado, não há alerta de tempo.** Nenhum valor universal é definido pelo desenvolvedor.
+- Detectadas a partir dos eventos de leitura: leituras inválidas repetidas (limite configurável), estação incompatível e tentativa de saída sem liberação.
+
+**Filtros novos:** unidade, setor, gravidade, período, categoria, tipo e situação.
+
+### 2.6 Tempo real
+
+**Tecnologia:** **Server-Sent Events** (unidirecional, compatível com proxy HTTP, reconexão nativa com `Last-Event-ID`). A arquitetura atual não tem comando do cliente que precise de canal bidirecional.
+
+**Entrega do evento:**
+- **Outbox** `event_outbox` (id sequencial `bigserial`), gravado **na mesma transação** da mudança: o evento só existe se a transação confirmou.
+- Um trigger `AFTER INSERT` faz `pg_notify` com o id. Notificação só é entregue após o commit; isso funciona com várias instâncias da API.
+- Cada instância relê o outbox e envia a cada assinante **filtrando por permissão e escopo** (mesmas regras da API).
+- O evento leva tópico e ids, nunca dados sensíveis. O cliente refaz a consulta autorizada.
+
+**Reconexão e falhas:**
+- Na reconexão, `Last-Event-ID` reenvia o que faltou, dentro da retenção do outbox (configurável).
+- Se a lacuna for maior que a retenção, o cliente invalida todas as consultas.
+- Falhas de publicação são registradas (`delivery_errors`) e geram alerta técnico acima de um limite.
+
+**No cliente:**
+- Invalidação seletiva das consultas do TanStack Query: sem recarregar a página, sem duplicar (o id do evento é deduplicado).
+- Indicador de conexão (ativa / reconectando / atualização periódica).
+- **Alternativa**: `REALTIME_MODE=sse|polling`, com intervalo configurável, para infraestrutura que não mantém conexão aberta.
+
+### 2.7 Etiquetas
+
+**Geração:**
+- Codificador **Code 128** próprio no domínio (puro, sem dependência, testável), gerando SVG.
+- QR Code só se houver justificativa operacional (decisão pendente).
+- Code 39 apenas para **leitura** de códigos legados do hospital.
+
+**Layouts (`label_layout`):**
+- tamanho em mm, margens, campos exibidos e DPI;
+- impressão pelo **navegador** (CSS de impressão no tamanho da etiqueta);
+- geração **ZPL** para impressoras térmicas Zebra. O envio à impressora depende de serviço de impressão ou agente local (infraestrutura).
+
+**`label_print`** (somente inserção):
+- código, entidade e versão;
+- impressa/reimpressa, com motivo obrigatório na reimpressão;
+- situação `ativa` / `cancelada` / `substituida`, com referência à substituta.
+
+**Conteúdo:** material, código, data de processamento, validade, ciclo/lote e situação de liberação quando pertinente. **Sem dado de paciente.**
+
+**Validação:**
+- **Automática**: teste que decodifica as barras do SVG gerado e confere o registro correspondente (ida e volta), mais teste visual da página de impressão.
+- **Física** (impressão e leitura com o leitor real): **pendente de hardware**, com roteiro de validação.
+
+### 2.8 Integração hospitalar
+
+**Camada `apps/api/src/integrations/`:**
+- Interface `HospitalAdapter`: `resolveCode`, `pushEvent`, `pullUpdates`, `health`.
+- `integration_system`: cadastro com tipo (estoque, centro cirúrgico, internação, prontuário, laboratório, equipamento), adaptador, configuração **não secreta** e referência a segredo (variável de ambiente/cofre, nunca no banco em claro).
+- `integration_message`: inbox/outbox com chave de idempotência única, hash do conteúdo, tentativas, último erro **sem dados sensíveis** e situação.
+- `external_identifier`: código externo → entidade interna.
+
+**Adaptadores entregues nesta etapa:**
+- **arquivo CSV com mapeamento configurável**, para cargas iniciais de códigos do hospital;
+- **adaptador de teste claramente identificado**, que não aparece como integração real.
+
+**FHIR R4 e HL7 v2:**
+- Interfaces e mapeamentos propostos (ex.: `Encounter`/`Procedure` para cirurgia, `Location` para setor).
+- **Implementação só com o sistema real identificado.**
+- **Não serão inventados** endpoints, credenciais nem contratos.
+
+### 2.9 Anexos, nuvem e contingência
+
+**Armazenamento de anexos:**
+- `AttachmentStore` vira interface com duas implementações: `LocalDiskStore` (atual) e `S3CompatibleStore` (S3, MinIO, armazenamento de objetos do provedor), com criptografia no servidor e URLs temporárias de curta duração.
+- Criptografia na aplicação (AES-256-GCM com versão de chave), seguindo o padrão do `field-crypto` existente, para o disco local e como camada adicional opcional.
+- **Migração de arquivos existentes**: apenas por comando manual, com cópia, verificação de SHA-256 e relatório, sem apagar a origem, e somente após backup e autorização.
+
+**Antimalware:**
+- `attachment.scan_status`: `pendente`, `limpo`, `infectado`, `erro`.
+- Download e uso **só** com `limpo`.
+- Adaptador **ClamAV (clamd, protocolo INSTREAM documentado)**.
+- Em produção, a API exige scanner configurado.
+- Em desenvolvimento, o modo `off` mantém os arquivos como **pendentes**, nunca como aprovados.
+- Teste com arquivo EICAR quando houver `clamd`; sem ele, teste com servidor clamd simulado, **identificado como tal**.
+
+**Nuvem:**
+- O repositório não define provedor. A proposta é **portável**: contêineres (API e web), configuração por ambiente, PostgreSQL gerenciado com criptografia em repouso e backups com teste de restauração, armazenamento de objetos, segredos em cofre do provedor e TLS no balanceador.
+- Endpoints `/api/health` (vivo) e `/api/ready` (banco, armazenamento, antimalware e entrega de eventos).
+- Documentação de backup, restauração, retenção/descarte (LGPD), monitoramento e contingência.
+- **Nada disso será declarado em operação sem o ambiente aprovado.**
+
+**Isolamento:**
+- Escopo por **unidade** (além de setor) nas consultas e eventos.
+- **RLS** do PostgreSQL por `institution_id` como defesa em profundidade (proposto, em etapa própria).
+
+**Offline:**
+- **Nenhuma liberação offline.**
+- Fila local de leituras na estação (IndexedDB, com `client_event_id` e `device_at`) só se a instituição aprovar uma política.
+- A reconciliação no servidor reaplica as mesmas regras; leituras recusadas geram alerta.
+- Até a aprovação, a estação apenas avisa que está sem conexão e não aceita leituras.
+
+### 2.10 Correção versionada do ciclo
+
+`sterilization_load_revision` (somente inserção), reaproveitando o padrão de `replaces_id` dos testes:
+- versão, campos alterados, antes/depois em `jsonb`;
+- tipo `cadastral` (programa, observação, operador) ou `tecnica` (horários, temperatura, pressão, exposição);
+- justificativa, solicitante e data;
+- `requires_approval` (sempre para correção técnica), aprovação e situação (`pendente`, `aplicada`, `rejeitada`).
+
+**Regras:**
+- O **resultado físico nunca muda por correção**. "Não conforme → conforme" só por investigação formal (não conformidade). O inverso é permitido, porque é mais restritivo.
+- Correção técnica aprovada em carga **já liberada**: a carga fica marcada para **reavaliação**, a saída dos pacotes é bloqueada até a nova decisão de um profissional com `cme:release`, e é gerado um alerta.
+- A carga mostra a versão vigente e o histórico. Os vínculos com pacotes, testes, decisões e uso não mudam.
+
+### 2.11 Importação de registros físicos (preparação da Fase 7)
+
+`equipment_cycle_import`:
+- equipamento, origem (arquivo/API/conector) e identificador externo do ciclo;
+- início/fim, dados técnicos e alarmes (`jsonb`);
+- SHA-256 do conteúdo, situação (`recebido`, `validado`, `vinculado`, `divergente`, `rejeitado`, `duplicado`), responsável/serviço e carga vinculada;
+- divergências e histórico de reprocessamento (`equipment_cycle_import_attempt`, somente inserção).
+
+**Regras:**
+- Restrição única (equipamento, identificador externo) quando o identificador existir; senão, deduplicação por hash.
+- Parser por **modelo de mapeamento configurável** (CSV), sem afirmar compatibilidade com nenhuma marca.
+- **Importar nunca libera carga.**
+
+### 2.12 Parâmetros governados
+
+**Tabelas:**
+- `rule_parameter_version` (somente inserção): chave, valor, unidade, contexto, referência, versão, proposto por, **aprovado por** (permissão nova `config:rules:approve`, separada de editar), vigência e situação (`demonstracao`, `proposto`, `aprovado`, `substituido`).
+- `rule_parameter` continua guardando o valor vigente (compatibilidade). A política de liberação ganha `load_release_policy_version` no mesmo modelo.
+
+**Migração:**
+- Os valores atuais viram versão 1 com situação `demonstracao` em instalações de demonstração.
+- Em instalações reais, a situação fica `proposto` (sem aprovação registrada).
+
+**Interface:** selo "Demonstração — não aprovado" em toda tela que usa o parâmetro (alertas, validade de etiqueta, liberação).
+
+### 2.13 Migrações planejadas
+
+Todas aditivas, com `down`, sem reescrever dados:
+
+| Nº | Conteúdo |
+| --- | --- |
+| 0005 | `instrument_asset`, `cme_process`, `scan_station`, `station_token`, `barcode_format`, `cme_scan_event` (somente inserção), `load_item.process_id` (opcional), lavadora como tipo de equipamento |
+| 0006 | Alertas v2: colunas novas + `alert_action`, com preenchimento da categoria a partir do tipo |
+| 0007 | `event_outbox` + trigger `pg_notify` |
+| 0008 | `label_layout`, `label_print`, `integration_system`, `integration_message`, `external_identifier` |
+| 0009 | Anexos: `scan_status`, `storage_backend`, `key_version` |
+| 0010 | `sterilization_load_revision`, `equipment_cycle_import`, `equipment_cycle_import_attempt` |
+| 0011 | `rule_parameter_version`, `load_release_policy_version` + preenchimento da versão 1 |
+
+### 2.14 Permissões novas
+
+| Permissão | Uso |
+| --- | --- |
+| `cme:scan` | Operar estações de leitura (técnicos sem acesso a decisões) |
+| `cme:stations:configure` | Cadastrar e parear estações e formatos |
+| `cme:override` | Exceção autorizada, com justificativa |
+| `cme:correction:approve` | Aprovar correção técnica de ciclo |
+| `integrations:manage` | Cadastrar integrações, ver mensagens técnicas |
+| `config:rules:approve` | Aprovar parâmetros e política (separado de editar) |
+
+### 2.15 Testes previstos (todos automatizados, contra PostgreSQL real quando envolvem API)
+
+| Grupo | Exemplos |
+| --- | --- |
+| Domínio | `PROCESS_FLOW` (transições, etapa pulada, devolução); parser de códigos (prefixos, formatos do hospital, inválidos); Code 128 (codificação + **decodificação de volta**); regras de correção (resultado físico imutável); deduplicação de importação; classificação de alertas |
+| API | Leitura aceita/recusada com resultado tipificado; idempotência; estação desabilitada ou de outra etapa; saída de carga não liberada bloqueada; exceção com `cme:override`; continuidade recepção → saída → uso; usuário/estação/horário gravados; isolamento por unidade; outbox só após commit (rollback não publica); SSE filtrado por permissão e replay por `Last-Event-ID`; alerta crítico não encerra com a condição ativa; reconhecer × resolver × encerrar; correção versionada e reavaliação; importação idempotente; antimalware (EICAR, pendente, infectado); regressão das suítes atuais |
+| Web | `ScanInput` com leitura simulada por teclado (rajada + Enter) × digitação humana; feedback por resultado; indicador de conexão; reconexão sem duplicar |
+| E2E | Recepção → limpeza → inspeção → preparo → embalagem → carga → liberação → armazenamento → saída → uso → devolução, com leituras por "teclado de leitor" no navegador; atualização ao vivo entre duas sessões |
+
+**O que testes simulados não provam:** leitor físico, impressora, `clamd` de produção, nuvem e equipamentos. Cada item terá roteiro de validação física com evidência a anexar.
+
+---
+
+## 3. Ordem de execução (etapas pequenas e reversíveis)
+
+| Etapa | Entrega | Critério de aceite |
+| --- | --- | --- |
+| **C1** | Domínio: etapas, `PROCESS_FLOW`, estados, parser de códigos, resultados tipificados | Testes de domínio |
+| **C2** | Migração 0005 + estações (cadastro, pareamento, token) + ativos + serviço `scan` (recepção → embalagem) | Testes de API (aceita/recusa/idempotência/estação) |
+| **C3** | Carga a partir de leituras (etapa 6), armazenamento, separação, saída com destino, devolução; uso cirúrgico exige saída (com período de transição configurável) | Continuidade recepção → uso; bloqueios |
+| **C4** | Interface: `ScanInput` (HID + câmera), telas de estação por etapa, linha do tempo do processo, rastreabilidade estendida | Testes de interface + E2E com leitor simulado por teclado |
+| **D1** | Alertas v2 (0006): categorias, gravidade crítica, ciclo de ações, filtros, bloqueio | Testes de API/interface |
+| **D2** | Regras de quebra de processo com prazos configuráveis + exceção autorizada | Testes de API |
+| **G1** | Outbox + SSE (0007), filtro por permissão/escopo, replay, indicador de conexão, modo periódico | Testes de API e E2E com duas sessões |
+| **F1** | Code 128, layouts, impressão pelo navegador, ZPL, reimpressão auditada (0008 parte) | Decodificação automática; roteiro físico pendente |
+| **F2** | Anexos: interface de armazenamento, criptografia, `scan_status`, ClamAV (0009) | EICAR/simulado; download bloqueado sem `limpo` |
+| **E1** | Camada de integração, `external_identifier`, inbox idempotente, adaptador CSV e de teste | Testes de idempotência e de não exposição de dados |
+| **H1** | Correção versionada do ciclo (0010 parte) | Histórico preservado; reavaliação de carga liberada |
+| **H2** | Importação de ciclos (0010 parte) | Idempotência; não libera |
+| **I1** | Parâmetros governados (0011) | Propor × aprovar; selo de demonstração |
+| **G2** | Nuvem/contingência: contêineres, `/api/ready`, documentação de backup/DR/retenção | Revisão; sem declarar ambiente em operação |
+| **I2** | Validação final, revisão de segurança, relatório | Todas as suítes + E2E no modo CI |
+
+Cada etapa termina com lint, typecheck, testes, build, commit e relatório (funcionalidades, arquivos, migrações, testes, regras, limitações, dependências e aprovações).
+
+---
+
+## 4. Dependências externas e aprovações institucionais
+
+**Hardware e fornecedores:**
+- Modelo dos leitores e configuração de sufixo (Enter/Tab).
+- Modelo e linguagem das impressoras (ZPL/EPL/outra) e tamanho das etiquetas.
+- Equipamentos da CME e formato de exportação dos ciclos.
+- Sistemas hospitalares existentes (estoque, centro cirúrgico, prontuário) e seus padrões de código e APIs.
+- Servidor antimalware.
+
+**Infraestrutura:**
+- Provedor ou modelo de hospedagem.
+- Armazenamento de objetos e cofre de segredos.
+- Política de backup/restauração e de retenção.
+- Suporte a conexões SSE no proxy.
+
+**Aprovações institucionais:**
+- Etapas obrigatórias e prazos de cada uma.
+- Momento da impressão da etiqueta (embalagem × montagem da carga).
+- Exigência de justificativa para digitação manual.
+- Política offline.
+- Quem aprova correções técnicas.
+- Parâmetros de validade, leitura do IB e qualificação.
+- Política de liberação.
+- Período de transição em que o uso cirúrgico é aceito sem saída registrada.
+
+## 5. Riscos
+
+| Risco | Mitigação |
+| --- | --- |
+| Adoção parcial (etapas sem leitura) gera muitos alertas | Etapas 8–9 configuráveis; prazos sem valor padrão; período de transição explícito |
+| Leitores HID com sufixo/velocidade diferentes | Detecção configurável por estação; teste de leitura na configuração da estação |
+| Leitura "válida" usada para pular etapa | Validação central no servidor; exceção só com permissão e auditoria |
+| Perda de evento entre banco e tela | Outbox na mesma transação + replay por id + modo periódico |
+| Arquivo malicioso disponível antes da verificação | `scan_status` obrigatório; download só `limpo` |
+| Correção mascarar falha | Resultado físico imutável; correção técnica exige aprovação e reavaliação |
+| Duplicidade em sincronização/integração | Idempotência por chave única em eventos, mensagens e importações |
