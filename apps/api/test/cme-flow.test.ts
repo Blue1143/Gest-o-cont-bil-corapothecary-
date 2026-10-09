@@ -236,4 +236,14 @@ describe('stations', () => {
     expect((await api(consulta, 'GET', '/cme/stations')).statusCode).toBe(403);
     expect((await api(consulta, 'GET', '/cme/processes')).statusCode).toBe(403);
   });
+
+  it('lists every sector as a destination for the CME, even with its clinical scope limited to the CME', async () => {
+    const res = await api(cme, 'GET', '/cme/sectors');
+    expect(res.statusCode).toBe(200);
+    const names = res.json<{ sectors: Array<{ name: string; kind: string }> }>().sectors;
+    expect(names.some((s) => s.kind === 'centro_cirurgico')).toBe(true);
+    expect(names.length).toBeGreaterThan(1);
+    expect(Object.keys(res.json<{ sectors: object[] }>().sectors[0]!).sort()).toEqual(['active', 'code', 'id', 'kind', 'name']);
+    expect((await api(consulta, 'GET', '/cme/sectors')).statusCode).toBe(403);
+  });
 });

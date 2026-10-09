@@ -10,8 +10,8 @@ import { ApiError } from '../../data/api/http';
 import { useSession } from '../auth/session';
 import { JustificationField, justificationError } from '../admin/shared';
 import { FormCard } from '../clinical/patient-forms';
-import { DemoTag, PageHeader, PatientLabel, Timeline, localToIso, nowLocal, sectorName, useOrg, useTimeZone } from '../clinical/shared';
-import { Attachments, CmeNav, LoadStatusBadge, RequireCme, TestResultBadge, useCme, useCmeMutation } from './shared';
+import { DemoTag, PageHeader, PatientLabel, Timeline, localToIso, nowLocal, useTimeZone } from '../clinical/shared';
+import { Attachments, CmeNav, LoadStatusBadge, RequireCme, TestResultBadge, cmeSectorName, useCme, useCmeMutation, useCmeSectors } from './shared';
 
 export function LoadDetailPage() {
   return <RequireCme title="Carga"><LoadDetailView /></RequireCme>;
@@ -30,6 +30,7 @@ function LoadDetailView() {
   const q = useQuery({ queryKey: ['cme', 'load', id], queryFn: () => cme.load(id!) });
   const [deciding, setDeciding] = useState<LoadStatus | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [testing, setTesting] = useState(false);
   if (q.isPending) return <div className="page"><LoadingState /></div>;
   if (q.isError) return <div className="page"><ErrorState onRetry={() => void q.refetch()} /></div>;
@@ -70,7 +71,8 @@ function LoadDetailView() {
         {...(l.bowieDickApplies && l.equipmentBowieDick ? { equipmentBowieDick: l.equipmentBowieDick.result } : {})}
         release={l.evaluation} releaseLabel={l.evaluation.policyApplied ? `Pela política: ${POLICY_VERDICT[l.evaluation.status]}` : 'Sem política configurada'} items={l.itemList.length} hasImplant={l.hasImplant}
         actions={<div className="ig-row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          {session.can('cme:edit') && !l.endedAt && !finishing ? <Button variant="primary" onClick={() => setFinishing(true)}>Encerrar ciclo</Button> : null}
+          {session.can('cme:edit') && !l.startedAt && !starting ? <Button variant="primary" onClick={() => setStarting(true)} disabled={!l.itemList.length}>Iniciar ciclo</Button> : null}
+          {session.can('cme:edit') && l.startedAt && !l.endedAt && !finishing ? <Button variant="primary" onClick={() => setFinishing(true)}>Encerrar ciclo</Button> : null}
           {session.can('cme:release') && !deciding ? next.map((to) => (
             <Button key={to} variant={to === 'liberada' ? 'primary' : 'secondary'} onClick={() => setDeciding(to)}
               disabled={to === 'liberada' && (!l.evaluation.policyApplied || l.evaluation.status !== 'liberada')}>{decisionLabel(l.status, to)}</Button>
@@ -80,6 +82,12 @@ function LoadDetailView() {
       {l.bowieDickApplies && !l.equipmentBowieDick ? <AlertBanner tone="warn" title="Bowie-Dick do dia não registrado antes deste ciclo">Registre o teste do equipamento em <Link to="/cme/bowie-dick">Bowie-Dick</Link>.</AlertBanner> : null}
       {l.policy ? <p className="ig-small ig-muted">Política de liberação v{l.policy.version}: exige {l.policy.requiredLoadTests.map((t) => TEST_TYPE_LABEL[t]).join(', ')}{l.policy.requireDailyBowieDick ? ', Bowie-Dick diário (vapor pré-vácuo)' : ''}{l.policy.holdImplantsUntilBiological ? ', implantáveis só com IB negativo' : ''}.</p> : <AlertBanner tone="warn" title="Sem política de liberação">Configure a política em Administração para que cargas possam ser liberadas.</AlertBanner>}
 
+      {!l.startedAt ? (
+        <AlertBanner tone="info" title="Carga em montagem" actions={session.can('cme:scan') ? <Link className="ig-btn ig-btn-sm" to={`/cme/estacao?carga=${l.id}`}>Ler pacotes na estação</Link> : undefined}>
+          {l.itemList.length} pacote(s) incluído(s) por leitura. Inicie o ciclo quando a carga estiver completa: depois disso, nenhum pacote entra.
+        </AlertBanner>
+      ) : null}
+      {starting ? <StartForm load={l} onDone={() => setStarting(false)} /> : null}
       {finishing ? <CycleForm load={l} onDone={() => setFinishing(false)} /> : null}
       {deciding ? <DecisionForm load={l} to={deciding} onDone={() => setDeciding(null)} /> : null}
 
@@ -126,9 +134,9 @@ function TestTable({ tests, canEdit }: { tests: CmeTestDto[]; canEdit: boolean }
 
 function ItemsTable({ items }: { items: LoadItemDto[] }) {
   const tz = useTimeZone();
-  const org = useOrg();
+  const sectors = useCmeSectors();
   const cols: Column<LoadItemDto>[] = [
-    { key: 'labelCode', label: 'Etiqueta', render: (i) => <span className="ig-mono">{i.labelCode}</span> },
+    { key: 'labelCode', label: 'Etiqueta', render: (i) => <span><span className="ig-mono">{i.labelCode}</span>{i.processId ? <> · <Link to={`/cme/processos/${i.processId}`} className="ig-small">trilha</Link></> : null}</span> },
     { key: 'description', label: 'Material', render: (i) => <span>{i.description}{i.quantity > 1 ? ` (${i.quantity})` : ''}{i.implant ? <span className="ig-small"> · implantável</span> : null}</span> },
     { key: 'packaging', label: 'Embalagem', value: (i) => PACKAGING_LABEL[i.packaging] },
     { key: 'expiresOn', label: 'Validade', value: (i) => i.expiresOn ?? '', render: (i) => (i.expiresOn ? formatDate(i.expiresOn) : 'Sem regra configurada') },
@@ -137,10 +145,22 @@ function ItemsTable({ items }: { items: LoadItemDto[] }) {
       const when = formatDate(i.use.usedAt, tz);
       if (i.use.patient && i.use.surgeryId) return <span>{when} · <Link to={`/cirurgias/${i.use.surgeryId}`}>{i.use.procedure}</Link> · <PatientLabel patient={i.use.patient} /></span>;
       if (i.use.procedure) return <span>{when} · {i.use.procedure} <span className="ig-small ig-muted">(paciente visível só para perfis com acesso a pacientes)</span></span>;
-      return <span>{when} · {sectorName(org.data, i.use.sectorId)} <span className="ig-small ig-muted">(sem paciente vinculado)</span></span>;
+      return <span>{when} · {cmeSectorName(sectors.data, i.use.sectorId)} <span className="ig-small ig-muted">(sem paciente vinculado)</span></span>;
     } },
   ];
   return <DataTable caption="Pacotes da carga" rows={items} rowKey={(i) => i.id} columns={cols} />;
+}
+
+function StartForm({ load, onDone }: { load: LoadDetail; onDone: () => void }) {
+  const cme = useCme()!;
+  const tz = useTimeZone();
+  const [startedAt, setStartedAt] = useState(nowLocal(tz));
+  const m = useCmeMutation(() => cme.startCycle(load.id, { startedAt: localToIso(startedAt, tz)!, rowVersion: load.rowVersion }));
+  return (
+    <FormCard title="Iniciar ciclo" subtitle={`${load.itemList.length} pacote(s) na carga. Depois do início, a carga não recebe mais pacotes.`} error={m.formError} onSubmit={() => m.mutation.mutate(undefined, { onSuccess: onDone })} onCancel={onDone} busy={m.mutation.isPending} submitLabel="Iniciar ciclo">
+      <Field label="Início do ciclo" required error={m.fieldErrors.startedAt ?? null}><input type="datetime-local" value={startedAt} max={nowLocal(tz)} onChange={(e) => setStartedAt(e.target.value)} /></Field>
+    </FormCard>
+  );
 }
 
 function CycleForm({ load, onDone }: { load: LoadDetail; onDone: () => void }) {

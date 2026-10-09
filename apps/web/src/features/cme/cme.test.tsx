@@ -17,7 +17,7 @@ const LOAD: LoadDetail = {
   evaluation: { status: 'aguardando', reasons: ['Indicador químico classe 5 não registrado.'], policyApplied: true },
   policy: { version: 2, requiredLoadTests: ['IQ5', 'REGISTRO_FISICO'], requireDailyBowieDick: true, holdImplantsUntilBiological: true, referenceId: null },
   bowieDickApplies: true, equipmentBowieDick: null, tests: [],
-  itemList: [{ id: 'i1', position: 1, labelCode: 'AV1-261009-01-01', setId: 'k1', setCode: 'cx-hernia', description: 'Caixa de herniorrafia', quantity: 1, packaging: 'sms', implant: false, expiresOn: '2026-11-08', use: null }],
+  itemList: [{ id: 'i1', position: 1, labelCode: 'AV1-261009-01-01', setId: 'k1', setCode: 'cx-hernia', description: 'Caixa de herniorrafia', quantity: 1, packaging: 'sms', implant: false, expiresOn: '2026-11-08', use: null, processId: null }],
   decisions: [{ id: 'd0', from: null, to: 'aguardando', at: '2026-10-09T11:00:00Z', by: 'Técnico', justification: 'Carga registrada.', policy: null, evaluation: { status: 'aguardando', reasons: [] } }],
   exposed: { patients: 0, surgeries: 0 }, reprocessedIntoId: null,
 };
@@ -28,8 +28,9 @@ function fakeSource(role: RoleCode, load: LoadDetail = LOAD) {
     me: async () => ({ user: { id: 'u1', login: role, displayName: 'Usuário' }, roles: [role], permissions: DEFAULT_ROLE_PERMISSIONS[role], scope: null, session: { expiresAt: '2026-10-09T23:00:00Z', idleExpiresAt: '2026-10-09T16:00:00Z', idleMinutes: 30 }, mustChangePassword: false }),
     login: async () => undefined, logout: async () => undefined, changePassword: async () => undefined,
   };
-  const trace: TraceResult = { query: 'AV1-261009-01-01', truncated: false, rows: [{ itemId: 'i1', labelCode: 'AV1-261009-01-01', description: 'Caixa de herniorrafia', setCode: 'cx-hernia', implant: false, loadId: 'l1', loadCode: 'AV1-261009-01', loadStatus: 'liberada', cycleStartedAt: '2026-10-09T11:00:00Z', sterilizerName: 'Autoclave 1', expiresOn: '2026-11-08', statusAt: '2026-10-09T12:15:00Z', use: { id: 'u1', usedAt: '2026-10-09T14:00:00Z', sectorId: 'cc', surgeryId: null, patient: null, procedure: 'Herniorrafia inguinal', recordedBy: 'Centro cirúrgico' } }] };
+  const trace: TraceResult = { query: 'AV1-261009-01-01', truncated: false, rows: [{ itemId: 'i1', labelCode: 'AV1-261009-01-01', description: 'Caixa de herniorrafia', setCode: 'cx-hernia', implant: false, loadId: 'l1', loadCode: 'AV1-261009-01', loadStatus: 'liberada', cycleStartedAt: '2026-10-09T11:00:00Z', sterilizerName: 'Autoclave 1', expiresOn: '2026-11-08', statusAt: '2026-10-09T12:15:00Z', processId: null, use: { id: 'u1', usedAt: '2026-10-09T14:00:00Z', sectorId: 'cc', surgeryId: null, patient: null, procedure: 'Herniorrafia inguinal', recordedBy: 'Centro cirúrgico' } }] };
   const cme = {
+    sectors: vi.fn(async () => ({ sectors: [{ id: 'cc', code: 'cc', name: 'Centro Cirúrgico', kind: 'centro_cirurgico', active: true }, { id: 'cme', code: 'cme', name: 'CME', kind: 'cme', active: true }] })),
     load: vi.fn(async () => load),
     decide: vi.fn(async () => undefined),
     trace: vi.fn(async () => trace),

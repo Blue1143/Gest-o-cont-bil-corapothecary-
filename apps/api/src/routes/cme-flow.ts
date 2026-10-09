@@ -1,10 +1,10 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import { z } from 'zod';
 import {
   SCANNABLE_STEPS, issueCode,
-  type AssetDto, type FlowConfigDto, type Paged, type ProcessStep, type ProcessDetail, type ProcessSummaryDto, type ScanEventDto, type ScanResponse, type StationDto,
+  type AssetDto, type CmeSectorDto, type FlowConfigDto, type Paged, type ProcessStep, type ProcessDetail, type ProcessSummaryDto, type ScanEventDto, type ScanResponse, type StationDto,
 } from '@ccih/domain';
 import type { DB } from '../db/types';
 import type { Env } from '../env';
@@ -40,7 +40,7 @@ const LooseBody = z.object({ stationId: Uuid, description: Text(200), setId: Uui
 const AssetCreate = z.object({ setId: Uuid, count: z.number().int().min(1).max(50), tag: OptionalText(60), justification: Justification }).strict();
 const AssetUpdate = z.object({ tag: OptionalText(60), status: z.enum(['ativo', 'manutencao', 'baixado']), statusReason: OptionalText(300), rowVersion: RowVersion, justification: Justification }).strict()
   .refine((b) => b.status === 'ativo' || !!b.statusReason, { path: ['statusReason'], message: 'Informe o motivo.' });
-const ProcessQuery = z.object({ situacao: z.enum(['abertos', 'encerrados', 'todos']).default('abertos'), etapa: STEP.optional(), q: z.string().trim().max(60).optional(), ...PageQuery }).strict();
+const ProcessQuery = z.object({ situacao: z.enum(['abertos', 'encerrados', 'todos']).default('abertos'), etapa: STEP.optional(), aguardando: STEP.optional(), q: z.string().trim().max(60).optional(), ...PageQuery }).strict();
 
 const scopeOf = (auth: AuthContext) => (auth.scope ? (auth.scope.length ? auth.scope : ['00000000-0000-0000-0000-000000000000']) : null);
 
@@ -49,6 +49,15 @@ export async function cmeFlowRoutes(app: FastifyInstance, { db, env }: { db: Kys
   const stations = { preHandler: requirePermission(db, 'cme:stations:configure') };
   const configure = { preHandler: requirePermission(db, 'cme:configure') };
   const scanner = { preHandler: requirePermission(db, 'cme:scan') };
+
+  /* ---------- Sectors (names only) ---------- */
+
+  // The CME distributes to and receives from the whole hospital, so its users see every sector's
+  // name even when their clinical scope is the CME alone. No patient data travels with it.
+  app.get('/cme/sectors', view, async (req): Promise<{ sectors: CmeSectorDto[] }> => {
+    const rows = await db.selectFrom('sector').select(['id', 'code', 'name', 'kind', 'active']).where('institution_id', '=', requireAuth(req).institutionId).orderBy('name').execute();
+    return { sectors: rows.map((s) => ({ id: s.id, code: s.code, name: s.name, kind: s.kind, active: s.active })) };
+  });
 
   /* ---------- Flow settings ---------- */
 
@@ -245,6 +254,15 @@ export async function cmeFlowRoutes(app: FastifyInstance, { db, env }: { db: Kys
     if (q.situacao === 'abertos') list = list.where('p.closed_at', 'is', null);
     if (q.situacao === 'encerrados') list = list.where('p.closed_at', 'is not', null);
     if (q.etapa) list = list.where('p.current_step', '=', q.etapa as never);
+    // Materials that can be confirmed at a step (manual conference list). The server re-validates each one.
+    if (q.aguardando) {
+      const step = q.aguardando as ProcessStep;
+      if (step === 'devolucao') list = list.where('p.state', '=', 'distribuido');
+      else if (step === 'armazenamento' || step === 'separacao' || step === 'distribuicao') {
+        list = list.where('p.closed_at', 'is', null).where('p.state', 'in', ['em_processo', 'liberado']).where('p.current_step', 'in', ['esterilizacao', 'armazenamento', 'separacao', 'devolucao'])
+          .where('i.load_id', 'in', db.selectFrom('sterilization_load').select('id').where('status', '=', 'liberada'));
+      } else list = list.where('p.closed_at', 'is', null).where(sql<boolean>`p.next_steps @> ARRAY[${step}]::text[]`);
+    }
     if (q.q) {
       const t = escapeLike(q.q.toUpperCase());
       list = list.where((eb) => eb.or([eb('a.code', 'like', `${t}%`), eb('p.code', 'like', `${t}%`), eb('i.label_code', 'like', `${t}%`), eb('p.description', 'ilike', `%${escapeLike(q.q!)}%`)]));

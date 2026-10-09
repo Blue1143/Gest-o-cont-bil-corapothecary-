@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LOAD_STATUS_LABEL, testResultLabel, type AttachmentDto, type LoadStatus, type SterilizationTestType, type Status, type TestResult } from '@ccih/domain';
+import { useQuery } from '@tanstack/react-query';
+import { LOAD_STATUS_LABEL, testResultLabel, type AttachmentDto, type CmeSectorDto, type LoadStatus, type SterilizationTestType, type Status, type TestResult } from '@ccih/domain';
 import { AlertBanner, Button, FormMessage, LOAD_TONE, StatusBadge, SubNav } from '@ccih/ui';
 import { useDataSource } from '../../data/source';
 import type { AttachmentEntity, CmePort } from '../../data/port';
@@ -12,6 +13,14 @@ import { PageHeader } from '../clinical/shared';
 export function useCme(): CmePort | undefined {
   return useDataSource().cme;
 }
+
+/** Every sector of the institution (names only): destinations and use places are hospital-wide. */
+export function useCmeSectors() {
+  const cme = useCme();
+  return useQuery({ queryKey: ['cme', 'sectors'], queryFn: () => cme!.sectors(), enabled: !!cme, staleTime: 5 * 60_000 });
+}
+
+export const cmeSectorName = (sectors: { sectors: CmeSectorDto[] } | undefined, id: string | null | undefined) => (id ? (sectors?.sectors.find((s) => s.id === id)?.name ?? 'Setor') : '—');
 
 /** Refreshed after any CME change (alerts and indicators depend on the records). */
 export const CME_KEYS = ['cme', 'alerts', 'surgery', 'facts'];
@@ -35,11 +44,15 @@ export function RequireCme({ title, children }: { title: string; children: React
 export function CmeNav() {
   const { pathname } = useLocation();
   const items = [
+    { key: 'estacao', label: 'Estação de leitura', href: '/cme/estacao' },
+    { key: 'processos', label: 'Processos', href: '/cme/processos' },
     { key: 'cargas', label: 'Cargas e liberação', href: '/cme' },
     { key: 'bd', label: 'Bowie-Dick', href: '/cme/bowie-dick' },
     { key: 'equip', label: 'Equipamentos', href: '/cme/equipamentos' },
     { key: 'caixas', label: 'Caixas', href: '/cme/caixas' },
-  ].map((i) => ({ ...i, active: i.href === '/cme' ? pathname === '/cme' || pathname.startsWith('/cme/cargas') : pathname.startsWith(i.href) }));
+    { key: 'materiais', label: 'Materiais', href: '/cme/materiais' },
+    { key: 'estacoes', label: 'Estações e fluxo', href: '/cme/estacoes' },
+  ].map((i) => ({ ...i, active: i.href === '/cme' ? pathname === '/cme' || pathname.startsWith('/cme/cargas') : pathname === i.href || pathname.startsWith(`${i.href}/`) }));
   return <SubNav label="Seções da CME" items={items} renderLink={(item, className) => <Link to={item.href} className={className} aria-current={item.active ? 'page' : undefined}>{item.label}</Link>} />;
 }
 

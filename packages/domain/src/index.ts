@@ -34,3 +34,4 @@ export * from './cme/consolidation';
 export * from './cme/dto';
 export * from './cme/codes';
 export * from './cme/flow';
+export * from './cme/hid';

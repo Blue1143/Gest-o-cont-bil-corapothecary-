@@ -49,7 +49,9 @@ export async function buildApp({ db, env, logger = true }: AppOptions): Promise<
     hsts: env.COOKIE_SECURE ? { maxAge: 31_536_000, includeSubDomains: true } : false,
   });
   await app.register(cookie);
-  await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
+  // Counted per signed-in session (runs after the session is loaded), so the stations of a CME or
+  // a whole hospital behind one NAT address do not share a single budget; anonymous calls count per IP.
+  await app.register(rateLimit, { max: 300, timeWindow: '1 minute', hook: 'preHandler', keyGenerator: (req) => (req.auth ? `s:${req.auth.sessionId}` : `ip:${req.ip}`) });
 
   app.decorateRequest('auth', null);
   app.addHook('onRequest', sessionLoader(db, env));

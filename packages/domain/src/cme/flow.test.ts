@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkChar, issueCode, parseCode } from './codes';
+import { classifyKeystrokes } from './hid';
 import { checkAssembly, decideOverride, decideScan, postReleaseSteps, type FlowConfig, type ProcessSnapshot, type ProcessStep } from './flow';
 
 const config: FlowConfig = { storageRequired: false, separationRequired: false };
@@ -110,5 +111,17 @@ describe('processing flow', () => {
     const pending = { ...loaded, package: { ...released, loadStatus: 'aguardando' as const } };
     expect(decideOverride(pending, { step: 'distribuicao', today, destinationId: 'cc' }, config).result).toBe('carga_nao_liberada');
     expect(decideOverride(received, { step: 'recepcao', today }, config).result).toBe('duplicada');
+  });
+});
+
+describe('keyboard-wedge reader detection', () => {
+  const cfg = { maxKeyIntervalMs: 35, minLength: 6 };
+  it('tells a reader burst from human typing', () => {
+    const burst = Array.from({ length: 16 }, (_, i) => 1000 + i * 8);
+    expect(classifyKeystrokes(burst, cfg)).toBe('leitor');
+    expect(classifyKeystrokes([600, ...burst.slice(1)], cfg)).toBe('leitor');
+    const typing = Array.from({ length: 16 }, (_, i) => i * 140);
+    expect(classifyKeystrokes(typing, cfg)).toBe('manual');
+    expect(classifyKeystrokes(burst.slice(0, 4), cfg)).toBe('manual');
   });
 });

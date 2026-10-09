@@ -41,6 +41,11 @@ const LoadDetailPage = named(() => import('../features/cme/LoadDetailPage'), 'Lo
 const BowieDickPage = named(() => import('../features/cme/EquipmentPages'), 'BowieDickPage');
 const EquipmentPage = named(() => import('../features/cme/EquipmentPages'), 'EquipmentPage');
 const SetsPage = named(() => import('../features/cme/EquipmentPages'), 'SetsPage');
+const StationPage = named(() => import('../features/cme/StationPage'), 'StationPage');
+const ProcessesPage = named(() => import('../features/cme/ProcessPages'), 'ProcessesPage');
+const ProcessDetailPage = named(() => import('../features/cme/ProcessPages'), 'ProcessDetailPage');
+const FlowSetupPage = named(() => import('../features/cme/SetupPages'), 'FlowSetupPage');
+const AssetsPage = named(() => import('../features/cme/SetupPages'), 'AssetsPage');
 const TracePage = named(() => import('../features/cme/TracePage'), 'TracePage');
 const AccountPage = named(() => import('../features/auth/AccountPage'), 'AccountPage');
 
@@ -77,6 +82,11 @@ export const routes: RouteObject[] = [
       { path: 'cme/equipamentos', element: guarded(['cme:view'], <EquipmentPage />) },
       { path: 'cme/caixas', element: guarded(['cme:view'], <SetsPage />) },
       { path: 'rastreabilidade', element: guarded(['cme:view'], <TracePage />) },
+      { path: 'cme/estacao', element: guarded(['cme:scan'], <StationPage />) },
+      { path: 'cme/processos', element: guarded(['cme:view'], <ProcessesPage />) },
+      { path: 'cme/processos/:id', element: guarded(['cme:view'], <ProcessDetailPage />) },
+      { path: 'cme/estacoes', element: guarded(['cme:view'], <FlowSetupPage />) },
+      { path: 'cme/materiais', element: guarded(['cme:view'], <AssetsPage />) },
       { path: 'conta', element: page(<AccountPage />) },
       {
         path: 'admin',

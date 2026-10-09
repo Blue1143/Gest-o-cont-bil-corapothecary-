@@ -34,7 +34,7 @@ export async function authRoutes(app: FastifyInstance, { db, env }: { db: Kysely
     reply.clearCookie(CSRF_COOKIE, cookieBase);
   };
 
-  app.post('/auth/login', { config: { rateLimit: { max: env.LOGIN_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute' } } }, async (req, reply) => {
+  app.post('/auth/login', { config: { rateLimit: { max: env.LOGIN_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute', keyGenerator: (req) => `ip:${req.ip}` } } }, async (req, reply) => {
     const { login, password } = parse(LoginBody, req.body);
     const user = await db.selectFrom('app_user').selectAll().where('login', '=', login).executeTakeFirst();
     const actor = { ...actorOf(req), institutionId: user?.institution_id ?? null, userId: user?.id ?? null, login };
@@ -94,7 +94,7 @@ export async function authRoutes(app: FastifyInstance, { db, env }: { db: Kysely
   });
 
   /** Own password change: current password required; other sessions end; the password is never logged. */
-  app.post('/auth/password', { config: { rateLimit: { max: env.LOGIN_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute' } } }, async (req) => {
+  app.post('/auth/password', { config: { rateLimit: { max: env.LOGIN_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute', keyGenerator: (req) => `ip:${req.ip}` } } }, async (req) => {
     if (!req.auth) throw new HttpError(401, 'nao_autenticado', 'Sessão inexistente ou expirada. Entre novamente.');
     const auth = req.auth;
     const b = parse(PasswordBody, req.body);

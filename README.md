@@ -6,7 +6,7 @@ Plataforma de gestão integrada da CCIH/SCIRAS: vigilância epidemiológica de I
 
 ## O que já funciona
 
-- **Acesso**: login com bloqueio por tentativas e limite por IP, sessão em cookie `HttpOnly`/`SameSite=Strict` com expiração por inatividade e tempo máximo, aviso antes de expirar, saída que limpa todos os dados em cache (estações compartilhadas).
+- **Acesso**: login com bloqueio por tentativas e limite por IP, limite geral de requisições por sessão, sessão em cookie `HttpOnly`/`SameSite=Strict` com expiração por inatividade e tempo máximo, aviso antes de expirar, saída que limpa todos os dados em cache (estações compartilhadas).
 - **Senhas**: cada usuário troca a própria senha em **Minha conta** (as outras sessões são encerradas). Usuário novo ou com senha redefinida pelo administrador recebe uma **senha temporária exibida uma única vez** e só acessa o sistema depois de trocá-la; vencimento opcional por `PASSWORD_MAX_AGE_DAYS`.
 - **Perfis (RBAC)**: Administrador, Enfermeiro CCIH, Médico infectologista, CME, Auditor, Gestor e Consulta, com 37 permissões granulares e **escopo por setor**. Tudo verificado no servidor; o menu mostra só o que o perfil pode usar.
 - **Pacientes** identificados por iniciais + prontuário. O nome completo é opcional, **cifrado** (AES-256-GCM) e só aparece com a permissão de dado identificado, mediante motivo, com registro no log. Página do paciente com linha do tempo longitudinal, internações e permanências por setor/leito, dispositivos com dia de uso, transferências, saída, cirurgias, culturas, casos de IRAS e **evolução CCIH** permanente (correções por retificação).

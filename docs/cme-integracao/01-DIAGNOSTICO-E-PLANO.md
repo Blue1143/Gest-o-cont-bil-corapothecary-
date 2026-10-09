@@ -405,3 +405,20 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 | Arquivo malicioso disponível antes da verificação | `scan_status` obrigatório; download só `limpo` |
 | Correção mascarar falha | Resultado físico imutável; correção técnica exige aprovação e reavaliação |
 | Duplicidade em sincronização/integração | Idempotência por chave única em eventos, mensagens e importações |
+
+## 6. Andamento
+
+| Etapa | Situação | Evidência |
+| --- | --- | --- |
+| C1 | Concluída | Testes de domínio (códigos com dígito verificador, decisões de leitura, exceção, detecção de leitor) |
+| C2/C3 | Concluídas | Migração 0005; testes de API contra PostgreSQL (continuidade, regra de saída, recusas, idempotência, exceção, pareamento, acesso) |
+| C4 | Concluída | Testes de interface (campo de leitura, idempotência no reenvio, exceção, conferência manual) e E2E do fluxo completo com leitor simulado por teclado |
+| D1 em diante | Pendentes | — |
+
+**O que C4 entrega:** tela "Estação de leitura" (escolha da estação, etapa, campo que distingue leitor × digitação pelo intervalo entre teclas, câmera via `BarcodeDetector` quando o navegador oferece, conferência manual no sistema, resultado da leitura com o motivo, exceção autorizada, últimas leituras); "Processos" (lista e trilha de cada rodada, com leituras recusadas); "Estações e fluxo" (regras institucionais, cadastro de estações, pareamento de computadores); "Materiais" (emissão de códigos de ativos); carga "em montagem" com início do ciclo; links da rastreabilidade para a trilha do processo.
+
+**Ajustes feitos durante a validação:**
+- A CME passou a receber a lista de setores do hospital por `GET /cme/sectors` (só nomes, sem dados de paciente). Antes, um usuário da CME com escopo restrito ao próprio setor não via os destinos de saída nem o nome do setor de uso na rastreabilidade.
+- O limite geral de requisições (300/min) passou a ser contado por sessão autenticada, e não por IP: estações de uma CME ou um hospital inteiro atrás de um mesmo NAT não dividem mais o mesmo limite. Login e troca de senha continuam limitados por IP, e um cookie de sessão inventado não abre novo limite.
+
+**Ainda não validado (depende de hardware):** leitura com leitores físicos (sufixo, velocidade, Code 39 legado), câmera em tablets/celulares da CME. O E2E simula o leitor por teclado; isso não substitui o roteiro com os modelos reais.

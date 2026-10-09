@@ -1,5 +1,6 @@
 import type { DataOrigin } from '../provenance';
 import type { PatientRef } from '../clinical/dto';
+import type { SectorKind } from '../org';
 import type { LoadReleaseEvaluation, LoadStatus, SterilizationTestType, TestResult } from '../rules/sterilization';
 import type { EquipmentStatus, IbControl, PackagingType, PhysicalResult, RecordedTestType, SterilizerType } from './cme';
 import type { Symbology } from './codes';
@@ -33,6 +34,8 @@ export interface ItemUseDto {
 export interface LoadItemDto {
   id: string; position: number; labelCode: string; setId: string | null; setCode: string | null; description: string; quantity: number;
   packaging: PackagingType; implant: boolean; expiresOn: string | null; use: ItemUseDto | null;
+  /** Processing round that produced the package (null for packages issued before the flow). */
+  processId: string | null;
 }
 
 export interface LoadSummary {
@@ -68,6 +71,7 @@ export interface TraceRow {
   loadId: string; loadCode: string; loadStatus: LoadStatus; cycleStartedAt: string | null; sterilizerName: string; expiresOn: string | null;
   /** When the load reached its current status (last release decision). */
   statusAt: string | null;
+  processId: string | null;
   use: ItemUseDto | null;
 }
 export interface TraceResult { query: string; rows: TraceRow[]; truncated: boolean }
@@ -119,3 +123,6 @@ export interface ScanResponse {
   process: ProcessSummaryDto | null;
   load: { id: string; code: string; packages: number } | null;
 }
+
+/** Institution sectors as the CME sees them: destinations and use places are hospital-wide, whatever the user's clinical scope. */
+export interface CmeSectorDto { id: string; code: string; name: string; kind: SectorKind; active: boolean }

@@ -5,9 +5,9 @@ import { LOAD_STATUS_LABEL, formatDate, type TraceRow } from '@ccih/domain';
 import { AlertBanner, Button, DataTable, Field, TraceTimeline, type Column, type TraceStep } from '@ccih/ui';
 import { useSession } from '../auth/session';
 import { FormCard } from '../clinical/patient-forms';
-import { PageHeader, PatientLabel, localToIso, nowLocal, sectorName, useOrg, useTimeZone } from '../clinical/shared';
+import { PageHeader, PatientLabel, localToIso, nowLocal, useTimeZone } from '../clinical/shared';
 import { useUrlFilters } from '../operations/shared';
-import { LoadStatusBadge, RequireCme, useCme, useCmeMutation } from './shared';
+import { LoadStatusBadge, RequireCme, cmeSectorName, useCme, useCmeMutation, useCmeSectors } from './shared';
 
 export function TracePage() {
   return <RequireCme title="Rastreabilidade"><Trace /></RequireCme>;
@@ -17,7 +17,7 @@ function Trace() {
   const cme = useCme()!;
   const session = useSession();
   const tz = useTimeZone();
-  const org = useOrg();
+  const sectors = useCmeSectors();
   const f = useUrlFilters();
   const q = f.get('q');
   const [term, setTerm] = useState(q);
@@ -28,10 +28,10 @@ function Trace() {
     const when = formatDate(r.use.usedAt, tz);
     if (r.use.patient && r.use.surgeryId) return <span>{when} · <Link to={`/cirurgias/${r.use.surgeryId}`}>{r.use.procedure}</Link> · <PatientLabel patient={r.use.patient} /></span>;
     if (r.use.procedure) return <span>{when} · {r.use.procedure} <span className="ig-small ig-muted">(paciente visível só para perfis com acesso a pacientes)</span></span>;
-    return <span>{when} · {sectorName(org.data, r.use.sectorId)} <span className="ig-small ig-muted">(sem paciente vinculado)</span></span>;
+    return <span>{when} · {cmeSectorName(sectors.data, r.use.sectorId)} <span className="ig-small ig-muted">(sem paciente vinculado)</span></span>;
   };
   const cols: Column<TraceRow>[] = [
-    { key: 'labelCode', label: 'Etiqueta', render: (r) => <span className="ig-mono">{r.labelCode}</span> },
+    { key: 'labelCode', label: 'Etiqueta', render: (r) => <span><span className="ig-mono">{r.labelCode}</span>{r.processId ? <> · <Link to={`/cme/processos/${r.processId}`} className="ig-small">trilha</Link></> : null}</span> },
     { key: 'description', label: 'Material', render: (r) => <span>{r.description}{r.implant ? <span className="ig-small"> · implantável</span> : null}</span> },
     { key: 'load', label: 'Carga', render: (r) => <span><Link to={`/cme/cargas/${r.loadId}`} className="ig-mono">{r.loadCode}</Link> <LoadStatusBadge status={r.loadStatus} /></span>, value: (r) => r.loadCode },
     { key: 'cycle', label: 'Ciclo', render: (r) => <span className="ig-small">{r.sterilizerName} · {formatDate(r.cycleStartedAt, tz)}</span> },
@@ -77,7 +77,7 @@ function traceSteps(r: TraceRow): TraceStep[] {
 
 function LooseUseForm({ onDone }: { onDone: () => void }) {
   const cme = useCme()!;
-  const org = useOrg();
+  const sectors = useCmeSectors();
   const tz = useTimeZone();
   const [d, setD] = useState({ labelCode: '', sectorId: '', usedAt: nowLocal(tz) });
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
@@ -93,7 +93,7 @@ function LooseUseForm({ onDone }: { onDone: () => void }) {
       error={m.formError} onSubmit={submit} onCancel={onDone} busy={m.mutation.isPending} submitLabel="Registrar uso">
       <div className="ig-form-row">
         <Field label="Etiqueta do pacote" required error={err('labelCode')}><input value={d.labelCode} maxLength={60} onChange={(e) => setD({ ...d, labelCode: e.target.value })} /></Field>
-        <Field label="Setor" required error={err('sectorId')}><select value={d.sectorId} onChange={(e) => setD({ ...d, sectorId: e.target.value })}><option value="">Selecione</option>{org.data?.sectors.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+        <Field label="Setor" required error={err('sectorId')}><select value={d.sectorId} onChange={(e) => setD({ ...d, sectorId: e.target.value })}><option value="">Selecione</option>{sectors.data?.sectors.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         <Field label="Usado em" required error={err('usedAt')}><input type="datetime-local" value={d.usedAt} max={nowLocal(tz)} onChange={(e) => setD({ ...d, usedAt: e.target.value })} /></Field>
       </div>
     </FormCard>

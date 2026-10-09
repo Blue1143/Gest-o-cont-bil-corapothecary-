@@ -135,3 +135,21 @@ a { color: var(--primary); }
 .cme-file-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .cme-file-list a { overflow-wrap: anywhere; }
 .cme-bd-grid td, .cme-bd-grid th { white-space: nowrap; }
+
+/* CME — reading stations */
+.step-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.step-tabs .ig-btn[aria-pressed="true"] { background: var(--primary-soft); border-color: var(--primary); font-weight: 600; }
+.scan-input { display: flex; flex-direction: column; gap: 4px; }
+.scan-label { font-weight: 600; }
+.scan-field { font: inherit; font-family: var(--font-mono); font-size: 20px; min-height: 48px; padding: 0 var(--space-3); border: 2px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-raised); color: var(--ink); flex: 1 1 260px; min-width: 0; }
+.scan-field:focus { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
+.scan-result { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); border: 2px solid var(--line); display: flex; flex-direction: column; gap: 6px; background: var(--surface-raised); }
+.scan-result.scan-ok { border-color: var(--ok); }
+.scan-result.scan-warn, .scan-result.scan-info { border-color: var(--warn); }
+.scan-result.scan-crit { border-color: var(--crit); }
+.scan-message { margin: 0; font-size: 18px; font-weight: 600; color: var(--ink); }
+.scan-camera { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.scan-video { width: 100%; max-width: 480px; border-radius: var(--radius-md); background: var(--ink); }
+.manual-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.manual-list li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: 6px var(--space-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.scan-code { white-space: nowrap; }

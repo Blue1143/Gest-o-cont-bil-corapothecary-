@@ -47,6 +47,7 @@ export const NAVIGATION: NavGroup[] = [
     label: 'CME',
     items: [
       { path: '/cme', permissions: ['cme:view'], label: 'CME', phase: null, summary: 'Ciclos, testes (Bowie-Dick, IQ classes 1–6, IB) e liberação de cargas.' },
+      { path: '/cme/estacao', permissions: ['cme:scan'], label: 'Estação de leitura', phase: null, summary: 'Leitura de código de barras na entrada, no processamento e na saída do CME.' },
       { path: '/rastreabilidade', permissions: ['cme:view'], label: 'Rastreabilidade', phase: null, summary: 'Lote → ciclo → carga → material → cirurgia → paciente, e o caminho inverso.' },
     ],
   },

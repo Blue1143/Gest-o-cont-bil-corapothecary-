@@ -315,7 +315,7 @@ export async function cmeRoutes(app: FastifyInstance, { db }: { db: Kysely<DB> }
       exposureMinutes: l.exposure_minutes, notes: l.notes, rowVersion: l.row_version, evaluation: ev.evaluation, policy: snapshot, bowieDickApplies: ev.bowieDickApplies,
       equipmentBowieDick: ev.equipmentBowieDick ? tests.find((t) => t.id === ev.equipmentBowieDick!.id)! : null,
       tests: tests.filter((t) => t.loadId === id),
-      itemList: items.map((i) => ({ id: i.id, position: i.position, labelCode: i.label_code, setId: i.set_id, setCode: i.set_code, description: i.description, quantity: i.quantity, packaging: i.packaging, implant: i.implant, expiresOn: i.expires_on, use: useMap.get(i.id) ?? null })),
+      itemList: items.map((i) => ({ id: i.id, position: i.position, labelCode: i.label_code, setId: i.set_id, setCode: i.set_code, description: i.description, quantity: i.quantity, packaging: i.packaging, implant: i.implant, expiresOn: i.expires_on, use: useMap.get(i.id) ?? null, processId: i.process_id })),
       decisions: decisions.map((d) => ({ id: d.id, from: d.from_status, to: d.to_status, at: d.decided_at.toISOString(), by: d.decided_by_name, justification: d.justification, policy: d.policy_snapshot as LoadDetail['policy'], evaluation: d.evaluation as LoadDetail['evaluation'] })),
       exposed: { surgeries: Number(exposure.surgeries), patients: Number(exposure.patients) }, reprocessedIntoId: next?.id ?? null,
     };

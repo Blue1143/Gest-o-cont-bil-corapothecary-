@@ -15,5 +15,8 @@ describe('login throttling', () => {
     const third = await attempt();
     expect(third.statusCode).toBe(429);
     expect(third.json().message).toMatch(/Muitas tentativas/);
+    // A made-up session cookie does not open a fresh budget: login attempts count per IP.
+    const forged = await ctx.app.inject({ method: 'POST', url: '/api/auth/login', headers: { origin: ORIGIN }, cookies: { ccih_session: 'inventado' }, payload: { login: 'admin', password: 'errada' } });
+    expect(forged.statusCode).toBe(429);
   });
 });

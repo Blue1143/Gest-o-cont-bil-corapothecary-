@@ -5,6 +5,7 @@ import type {
   QualityAuditDetail, QualityAuditDto, StaffMember, SupplyDto, SupplyMovementDto, SurveillanceRow, TrainingCoveragePayload, TrainingDto, TrainingSessionDto,
   AttachmentDto, CmeOverview, CmeTestDto, EquipmentStatus, IbControl, InstrumentSetDto, LoadDetail, LoadStatus, LoadSummary, PackagingType, RecordedTestType,
   SterilizerDto, SterilizerType, TestResult, TraceResult,
+  AssetDto, CmeSectorDto, FlowConfigDto, InputMethod, ProcessDetail, ProcessStep, ProcessSummaryDto, ScanConfig, ScanEventDto, ScanResponse, StationDto, Symbology,
 } from '@ccih/domain';
 
 export type { InstitutionData, Sector, SectorKind, Unit } from '@ccih/domain';
@@ -271,7 +272,7 @@ export interface SetInput extends Justified {
   code: string; name: string; specialty: string | null; composition: string | null; itemCount: number | null; packaging: PackagingType; implant: boolean; active: boolean; rowVersion: number | null;
 }
 export interface LoadInput {
-  sterilizerId: string; program: string; startedAt: string; notes: string | null; reprocessedFromId: string | null;
+  sterilizerId: string; program: string; startedAt: string | null; notes: string | null; reprocessedFromId: string | null;
   items: Array<{ setId: string | null; description: string | null; quantity: number; packaging: PackagingType | null; implant: boolean | null }>;
 }
 export interface CycleInput { endedAt: string; temperatureC: number | null; pressureKpa: number | null; exposureMinutes: number | null; physicalResult: 'conforme' | 'nao_conforme'; notes: string | null; rowVersion: number }
@@ -303,6 +304,32 @@ export interface CmePort {
   upload(entity: AttachmentEntity, entityId: string, file: File): Promise<AttachmentDto>;
   /** Same-origin download link (the session cookie authorizes it; the API logs it). */
   attachmentUrl(id: string): string;
+  startCycle(id: string, input: { startedAt: string; rowVersion: number }): Promise<void>;
+  sectors(): Promise<{ sectors: CmeSectorDto[] }>;
+  flowConfig(): Promise<FlowConfigDto>;
+  saveFlowConfig(input: Justified & Omit<FlowConfigDto, 'rowVersion'> & { rowVersion: number }): Promise<void>;
+  stations(): Promise<{ stations: StationDto[] }>;
+  saveStation(id: string | null, input: StationInput): Promise<void>;
+  pairStation(id: string, label: string): Promise<{ deviceId: string }>;
+  revokeDevice(id: string): Promise<void>;
+  thisStation(): Promise<{ station: StationDto | null; deviceId: string | null }>;
+  assets(q?: { q?: string; setId?: string }): Promise<{ assets: AssetDto[] }>;
+  createAssets(input: Justified & { setId: string; count: number; tag: string | null }): Promise<{ assets: AssetDto[] }>;
+  updateAsset(id: string, input: Justified & { tag: string | null; status: AssetDto['status']; statusReason: string | null; rowVersion: number }): Promise<void>;
+  scan(input: ScanInput): Promise<ScanResponse>;
+  receiveLoose(input: { stationId: string; description: string; setId: string | null; originSectorId: string | null; clientEventId: string | null }): Promise<ScanResponse>;
+  processes(q: Query): Promise<Paged<ProcessSummaryDto>>;
+  process(id: string): Promise<ProcessDetail>;
+  scanEvents(q: { stationId?: string; limit?: number }): Promise<{ events: ScanEventDto[] }>;
+}
+
+export interface StationInput extends Justified {
+  sectorId: string; name: string; location: string | null; steps: ProcessStep[]; inputMethods: InputMethod[]; symbologies: Symbology[]; deviceLabel: string | null;
+  responsibleUserId: string | null; requirePairing: boolean; scanConfig: ScanConfig; enabled: boolean; rowVersion: number | null;
+}
+export interface ScanInput {
+  stationId: string; code: string; inputMethod: InputMethod; step: ProcessStep; clientEventId: string | null; deviceAt: string | null; outcome: string | null;
+  destinationSectorId: string | null; originSectorId: string | null; loadId: string | null; packaging: PackagingType | null; justification: string | null; override: boolean;
 }
 
 export interface CcihDataSource {

@@ -103,7 +103,7 @@ export interface TraceFilter { itemIds?: string[]; loadIds?: string[]; limit: nu
 export async function traceRows(db: Db, auth: AuthContext, f: TraceFilter): Promise<{ rows: TraceRow[]; truncated: boolean }> {
   let q = db.selectFrom('load_item as i').innerJoin('sterilization_load as l', 'l.id', 'i.load_id').innerJoin('sterilizer as st', 'st.id', 'l.sterilizer_id')
     .leftJoin('instrument_set as k', 'k.id', 'i.set_id')
-    .select((eb) => ['i.id', 'i.label_code', 'i.description', 'i.implant', 'i.expires_on', 'k.code as set_code', 'l.id as load_id', 'l.code as load_code', 'l.status', 'l.started_at', 'st.name as sterilizer',
+    .select((eb) => ['i.id', 'i.label_code', 'i.description', 'i.implant', 'i.expires_on', 'i.process_id', 'k.code as set_code', 'l.id as load_id', 'l.code as load_code', 'l.status', 'l.started_at', 'st.name as sterilizer',
       eb.selectFrom('load_release_decision as d').select((e) => e.fn.max('d.decided_at').as('at')).whereRef('d.load_id', '=', 'l.id').as('status_at')])
     .where('i.institution_id', '=', auth.institutionId);
   if (auth.scope) q = q.where('st.sector_id', 'in', auth.scope.length ? auth.scope : ['00000000-0000-0000-0000-000000000000']);
@@ -120,7 +120,7 @@ export async function traceRows(db: Db, auth: AuthContext, f: TraceFilter): Prom
     rows: page.map((r) => ({
       itemId: r.id, labelCode: r.label_code, description: r.description, setCode: r.set_code, implant: r.implant, loadId: r.load_id, loadCode: r.load_code,
       loadStatus: r.status, cycleStartedAt: r.started_at?.toISOString() ?? null, sterilizerName: r.sterilizer, expiresOn: r.expires_on,
-      statusAt: r.status_at ? new Date(r.status_at as Date).toISOString() : null, use: useMap.get(r.id) ?? null,
+      statusAt: r.status_at ? new Date(r.status_at as Date).toISOString() : null, processId: r.process_id, use: useMap.get(r.id) ?? null,
     })),
   };
 }
