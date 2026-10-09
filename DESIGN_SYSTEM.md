@@ -25,6 +25,7 @@ Além das cores, espaçamentos, raios, sombras e alturas, o gerador expõe cada 
 | --- | --- |
 | Base | `Button`, `Icon`, `StatusBadge`, `InfectionTag`, `ProvenanceTag`, `AlertBanner`, `EnvironmentBanner`, `Card` |
 | Estados | `LoadingState`, `EmptyState`, `ErrorState` |
+| Formulários e navegação | `Field` (rótulo, ajuda, erro pt-BR, obrigatório), `FormMessage`, `ConfirmDialog` (`<dialog>` nativo), `SubNav`, `Disclosure` (`<details>` para revelação progressiva) |
 | Dados | `DataTable` (pesquisa, ordenação, paginação, seleção de colunas, densidade, exportação, estados), `KpiCard` |
 | Gráficos | `ChartFrame`, `TrendChart`, `BarChart` |
 | Registros | `PatientRecord`, `SurgeryRecord`, `SterilizationCycle`, `TraceTimeline` |

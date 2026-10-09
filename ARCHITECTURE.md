@@ -4,15 +4,16 @@
 
 ```
 ccih-integra/          Design system publicado (fonte dos tokens; referência visual)
-packages/domain        Regras, configuração, referências e motor de indicadores — TypeScript puro
+packages/domain        Regras, configuração, referências, permissões e motor de indicadores — TypeScript puro
+packages/demo-data     Gerador de dados sintéticos (usado pelo modo demo do web e pelo seed da API)
 packages/ui            Componentes React do design system (tokens gerados de ccih-integra/tokens.json)
-apps/web               Aplicação React (Vite) — telas, navegação, porta de dados
-apps/api               (Fase 2) API Fastify + PostgreSQL: autenticação, RBAC, auditoria, persistência
+apps/web               Aplicação React (Vite) — telas, navegação, sessão, porta de dados
+apps/api               API Fastify + PostgreSQL (Kysely): autenticação, RBAC, escopo, auditoria, configurações
 scripts/               Geração de tokens e utilidades de build
 docs/                  Auditorias e roadmap
 ```
 
-Dependências apontam para dentro: `web → ui → domain`, `api → domain`. O domínio não conhece React, HTTP nem banco.
+Dependências apontam para dentro: `web → ui → domain`, `api → domain`, e `demo-data → domain`. O domínio não conhece React, HTTP nem banco; permissões e o registro de parâmetros ficam nele para que API e interface usem as mesmas definições.
 
 ## Camadas
 
@@ -21,14 +22,14 @@ Dependências apontam para dentro: `web → ui → domain`, `api → domain`. O 
 | `@ccih/domain` | Cálculo de indicadores, avaliação de metas, regras de dispositivo, cirurgia, CME, bundles e insumos, datas no fuso da instituição, proveniência e referências | Não decide valores clínicos: recebe parâmetros configurados; sem parâmetro responde "sem regra" |
 | `@ccih/ui` | Apresentação acessível (status com ícone + palavra, gráficos com tabela e teclado, estados de carregando/vazio/erro) | Não calcula regra de negócio: recebe avaliações prontas |
 | `apps/web` | Telas, filtros (na URL), composição, porta de dados (`CcihDataSource`) | Não importa mocks diretamente: usa a porta |
-| `apps/api` (Fase 2) | Autorização no servidor, persistência, auditoria, integração | Não confia em filtros vindos do cliente |
+| `apps/api` | Autenticação, autorização (permissão + escopo por setor) em todo endpoint, persistência, auditoria na mesma transação da alteração | Não confia em filtros, direções ou ids vindos do cliente |
 
 ## Fonte de dados desacoplada
 
 A interface só conhece `CcihDataSource` (`apps/web/src/data/port.ts`). Implementações:
 
 - `DemoDataSource` — dados sintéticos determinísticos, marcados `origin: 'demo'`. A interface exibe a faixa **AMBIENTE DE DEMONSTRAÇÃO** e etiquetas de dado/meta de demonstração.
-- `ApiDataSource` (Fase 2) — HTTP para `apps/api`, sessão por cookie `HttpOnly`.
+- `ApiDataSource` — HTTP para `apps/api` (mesma origem via proxy), sessão por cookie `HttpOnly`, token CSRF no cabeçalho, portas `auth` (login, sessão) e `admin` (configurações, usuários, auditoria). Só existe com backend: no modo demo a Administração é somente leitura.
 
 `VITE_DATA_SOURCE` escolhe a fonte. Build de produção **sem** essa variável não inicia (nunca cai para demo por engano).
 
@@ -40,13 +41,19 @@ Fatos mensais por setor (`FactRow`: período, setor, contagens) → `computeIndi
 
 `InstitutionalConfig` = fuso horário + metas (`IndicatorTarget`, com origem e aprovador) + parâmetros de regra (`RuleParameter`, cada um ligado a uma `ClinicalReference` com versão, fonte, validação e status). Política de liberação de cargas da CME também é configuração. A Fase 2 move isso para tabelas versionadas editáveis em Administração, com auditoria.
 
-## Backend (Fase 2) — decisões
+## Sessão no cliente
 
-- **Fastify + TypeScript**, validação de entrada com esquemas (allowlist de campos → sem mass assignment).
-- **PostgreSQL 16** com migrações versionadas (Prisma Migrate) e seed sintético.
-- **Autenticação**: sessão em cookie `HttpOnly; Secure; SameSite=Strict`, senha argon2id, bloqueio por tentativas, timeout por inatividade, MFA opcional; preparado para SSO (OIDC) institucional.
+`SessionProvider` consulta `/auth/me` (que responde `{ authenticated: false }` para visitantes), expõe `can(...permissões)` e o motivo do fim da sessão (`saida`, `inatividade`, `expirada`). `RequireSession` e `Guard` fazem os redirecionamentos; o menu é filtrado por permissão. Ao sair ou expirar, o cache inteiro de consultas é descartado. `IdleWarning` avisa 2 minutos antes da expiração por inatividade e mantém a sessão viva enquanto há atividade real.
+
+## Backend — decisões
+
+- **Fastify + TypeScript**, validação de entrada com zod `strict` (campos desconhecidos recusados → sem mass assignment), mensagens pt-BR.
+- **PostgreSQL 16 + Kysely** (consultas tipadas e parametrizadas, sem binários nativos de ORM), migrações versionadas no código e aplicadas pelo papel dono; o papel de aplicação recebe só DML.
+- **Build**: esbuild empacota a API com os pacotes internos; dependências npm ficam externas.
+- **Autenticação**: sessão em cookie `HttpOnly; Secure; SameSite=Strict` (token opaco, só o SHA-256 no banco), argon2id, bloqueio por tentativas, limite por IP, expiração ociosa e absoluta no servidor; preparada para SSO (OIDC) e MFA.
 - **Autorização**: RBAC com permissões granulares + escopo por unidade/setor aplicado em toda consulta (anti-IDOR); dados identificados exigem permissão própria.
-- **Auditoria**: `audit_log` somente-inserção com encadeamento de hash; toda alteração crítica gravada na mesma transação.
+- **Auditoria**: `audit_log` somente-inserção (privilégio + trigger) com cadeia de hashes serializada por advisory lock; toda alteração crítica gravada na mesma transação, com antes/depois e justificativa obrigatória.
+- **Concorrência**: `row_version` em toda configuração editável; conflito → 409 com mensagem para recarregar.
 - **CSRF**: SameSite=Strict + token de dupla submissão para métodos de escrita.
 - **Interoperabilidade**: camada `integrations/` com adaptadores (prontuário eletrônico, LIS, ERP) que convertem para o modelo interno; conceitos compatíveis com HL7 FHIR (Patient, Encounter, Device, Procedure, Observation, DiagnosticReport, MedicationRequest) sem acoplamento prematuro.
 

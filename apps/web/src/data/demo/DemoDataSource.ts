@@ -1,9 +1,6 @@
 import { addMonths, monthStart, todayIn, type Provenance } from '@ccih/domain';
 import type { CcihDataSource, FactsQuery } from '../port';
-import { generateFacts } from './facts';
-import { DEMO_CONFIG, DEMO_LOAD_POLICY, DEMO_REFERENCES, DEMO_SECTORS, DEMO_UNITS } from './institution';
-
-const SOURCE = 'Gerador sintético de demonstração v1 (sem pacientes reais)';
+import { DEMO_CONFIG, DEMO_LOAD_POLICY, DEMO_REFERENCES, DEMO_SECTORS, DEMO_SOURCE, DEMO_UNITS, generateFacts } from '@ccih/demo-data';
 
 /** In-memory synthetic source. Selected only when VITE_DATA_SOURCE=demo; flags every payload as demo. */
 export class DemoDataSource implements CcihDataSource {
@@ -12,7 +9,7 @@ export class DemoDataSource implements CcihDataSource {
   constructor(private readonly now: () => Date = () => new Date()) {}
 
   private provenance(): Provenance {
-    return { origin: 'demo', source: SOURCE, consolidatedAt: this.now().toISOString() };
+    return { origin: 'demo', source: DEMO_SOURCE, consolidatedAt: this.now().toISOString() };
   }
 
   /** Last complete month in the institution zone: synthetic data never covers the current month. */

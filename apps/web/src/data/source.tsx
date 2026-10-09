@@ -4,6 +4,9 @@ import type { CcihDataSource, FactsQuery } from './port';
 
 export class DataSourceConfigError extends Error {}
 
+/** Fired by the API source on 401 so the session layer can send the user to the login page. */
+export const UNAUTHORIZED_EVENT = 'ccih:unauthorized';
+
 /**
  * Picks the data source from VITE_DATA_SOURCE. Production builds must set it explicitly so a
  * deployment never falls back to synthetic data by accident.
@@ -12,7 +15,10 @@ export async function createDataSource(env: { VITE_DATA_SOURCE?: string; PROD?: 
   const kind = env.VITE_DATA_SOURCE ?? (env.PROD ? undefined : 'demo');
   // Loaded on demand so an institutional build never ships the synthetic generator in its main bundle.
   if (kind === 'demo') return new (await import('./demo/DemoDataSource')).DemoDataSource();
-  if (kind === 'api') throw new DataSourceConfigError('A fonte de dados "api" será habilitada com o backend (Fase 2).');
+  if (kind === 'api') {
+    const { ApiDataSource } = await import('./api/ApiDataSource');
+    return new ApiDataSource('/api', () => window.dispatchEvent(new Event(UNAUTHORIZED_EVENT)));
+  }
   throw new DataSourceConfigError('Fonte de dados não configurada. Defina VITE_DATA_SOURCE (veja .env.example).');
 }
 

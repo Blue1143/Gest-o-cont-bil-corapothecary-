@@ -3,7 +3,8 @@ import { formatDate, formatNumber, monthLongLabel } from '@ccih/domain';
 import { BarChart, Disclosure, ErrorState, KpiCard, LoadingState, ProvenanceTag, TrendChart } from '@ccih/ui';
 import { NARROW, useMediaQuery } from '../../app/useMediaQuery';
 import { PERIOD_OPTIONS, periodWindow, sectorScope, useGlobalFilters } from '../../app/filters';
-import { useFacts, useInstitution } from '../../data/source';
+import { useDataSource, useFacts, useInstitution } from '../../data/source';
+import { useSession } from '../auth/session';
 import { buildKpi, bundleAdherence, exposure, irasBySector, irasTrend, type DashboardInput } from './model';
 import { MiniKpiList, PlannedBlock, exportCsv, statusSummary } from './parts';
 
@@ -17,6 +18,8 @@ export function DashboardPage() {
   const facts = useFacts({ from, to: win.periods[win.periods.length - 1]! });
   const ids = { period: useId(), unit: useId(), sector: useId() };
   const narrow = useMediaQuery(NARROW);
+  const session = useSession();
+  const source = useDataSource();
 
   if (institution.isPending || facts.isPending) return <div className="page"><LoadingState lines={6} label="Carregando painel…" /></div>;
   if (institution.isError || facts.isError) {
@@ -31,6 +34,9 @@ export function DashboardPage() {
   const periodLabel = first === last ? monthLongLabel(last) : `${monthLongLabel(first)} – ${monthLongLabel(last)}`;
   const scopeLabel = filters.sectorId ? sectors.find((s) => s.id === filters.sectorId)?.name : filters.unitId ? units.find((u) => u.id === filters.unitId)?.name : 'Todas as unidades';
   const origin = facts.data.provenance.origin;
+  // Aggregated exports require permission and are recorded in the audit log when a backend exists.
+  const canExport = session.can('export:aggregate');
+  const logExport = source.admin ? (e: { resource: string; rows: number }) => source.admin!.logExport(e) : undefined;
   const headline = [buildKpi('di-iras', input, 'IRAS (global)'), buildKpi('di-ipcs', input, 'IPCS'), buildKpi('di-pav', input, 'PAV'), buildKpi('di-itu', input, 'ITU-AC'), buildKpi('tx-isc-limpa', input, 'ISC limpa')];
   const trend = irasTrend(input);
   const bySector = irasBySector(input);
@@ -117,7 +123,7 @@ export function DashboardPage() {
           unit="‰"
           labels={trend.labels}
           series={trend.series}
-          onExport={(c, r) => exportCsv('densidade-iras-por-tipo', c, r, origin)}
+          {...(canExport ? { onExport: (c, r) => exportCsv('densidade-iras-por-tipo', c, r, origin, logExport) } : {})}
         />
         <BarChart
           title="IRAS por setor"
@@ -127,7 +133,7 @@ export function DashboardPage() {
           data={bySector}
           categoryLabel="Setor"
           valueLabel="Densidade"
-          onExport={(c, r) => exportCsv('iras-por-setor', c, r, origin)}
+          {...(canExport ? { onExport: (c, r) => exportCsv('iras-por-setor', c, r, origin, logExport) } : {})}
         />
         <BarChart
           title="Adesão aos bundles"

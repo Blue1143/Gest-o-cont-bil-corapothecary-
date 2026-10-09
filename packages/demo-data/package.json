@@ -1,0 +1,10 @@
+{
+  "name": "@ccih/demo-data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Gerador de dados sintéticos de demonstração (sem pacientes reais), compartilhado pelo app web e pelo seed da API.",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc -p tsconfig.json", "test": "vitest run" },
+  "dependencies": { "@ccih/domain": "0.1.0" }
+}

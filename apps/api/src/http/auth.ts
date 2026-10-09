@@ -1,0 +1,131 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { Kysely } from 'kysely';
+import { isPermission, type Permission } from '@ccih/domain';
+import type { DB } from '../db/types';
+import type { Env } from '../env';
+import { audit, type AuditActor } from '../audit/audit';
+import { safeEqualHex, sha256 } from '../security/crypto';
+import { forbidden, HttpError, unauthorized } from './errors';
+import type { SectorScope } from '../repositories/institution';
+
+export const SESSION_COOKIE = 'ccih_session';
+export const CSRF_COOKIE = 'ccih_csrf';
+export const CSRF_HEADER = 'x-csrf-token';
+
+export interface AuthContext {
+  sessionId: string;
+  csrfHash: string;
+  userId: string;
+  login: string;
+  displayName: string;
+  institutionId: string;
+  roles: string[];
+  permissions: Permission[];
+  /** undefined = all sectors of the institution. */
+  scope: SectorScope;
+  expiresAt: Date;
+  idleExpiresAt: Date;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    auth: AuthContext | null;
+  }
+}
+
+export function actorOf(req: FastifyRequest): AuditActor {
+  return {
+    institutionId: req.auth?.institutionId ?? null,
+    userId: req.auth?.userId ?? null,
+    login: req.auth?.login ?? null,
+    ip: req.ip ?? null,
+    userAgent: (req.headers['user-agent'] ?? '').slice(0, 300) || null,
+  };
+}
+
+/** Resolves the session cookie into an AuthContext, enforcing idle and absolute timeouts. */
+export function sessionLoader(db: Kysely<DB>, env: Env) {
+  const idleMs = env.SESSION_IDLE_MINUTES * 60_000;
+  return async function loadSession(req: FastifyRequest) {
+    req.auth = null;
+    const token = req.cookies[SESSION_COOKIE];
+    if (!token) return;
+    const row = await db
+      .selectFrom('session')
+      .innerJoin('app_user', 'app_user.id', 'session.user_id')
+      .select(['session.id as sessionId', 'session.csrf_hash', 'session.last_seen_at', 'session.expires_at', 'app_user.id as userId', 'app_user.login', 'app_user.display_name', 'app_user.institution_id', 'app_user.active', 'app_user.scope_all'])
+      .where('session.token_hash', '=', sha256(token))
+      .where('session.revoked_at', 'is', null)
+      .executeTakeFirst();
+    if (!row) return;
+    const now = Date.now();
+    const idleExpired = now - row.last_seen_at.getTime() > idleMs;
+    const absoluteExpired = now > row.expires_at.getTime();
+    if (idleExpired || absoluteExpired || !row.active) {
+      const reason = !row.active ? 'usuario_inativo' : idleExpired ? 'inatividade' : 'tempo_maximo';
+      await db.updateTable('session').set({ revoked_at: new Date(), revoked_reason: reason }).where('id', '=', row.sessionId).execute();
+      await audit(db, { institutionId: row.institution_id, userId: row.userId, login: row.login, ip: req.ip, userAgent: null }, { action: 'session_expired', entity: 'session', entityId: row.sessionId, context: { reason } });
+      return;
+    }
+    const [roles, scopes] = await Promise.all([
+      db.selectFrom('user_role').innerJoin('role', (j) => j.onRef('role.code', '=', 'user_role.role_code').onRef('role.institution_id', '=', 'user_role.institution_id')).select(['role.code', 'role.permissions']).where('user_role.user_id', '=', row.userId).execute(),
+      row.scope_all ? Promise.resolve([]) : db.selectFrom('user_scope').select('sector_id').where('user_id', '=', row.userId).execute(),
+    ]);
+    const permissions = [...new Set(roles.flatMap((r) => r.permissions))].filter(isPermission);
+    // Touch at most once a minute to keep writes low.
+    let lastSeen = row.last_seen_at;
+    if (now - lastSeen.getTime() > 60_000) {
+      lastSeen = new Date(now);
+      await db.updateTable('session').set({ last_seen_at: lastSeen }).where('id', '=', row.sessionId).execute();
+    }
+    req.auth = {
+      sessionId: row.sessionId,
+      csrfHash: row.csrf_hash,
+      userId: row.userId,
+      login: row.login,
+      displayName: row.display_name,
+      institutionId: row.institution_id,
+      roles: roles.map((r) => r.code),
+      permissions,
+      scope: row.scope_all ? undefined : scopes.map((s) => s.sector_id),
+      expiresAt: row.expires_at,
+      idleExpiresAt: new Date(lastSeen.getTime() + idleMs),
+    };
+  };
+}
+
+export function requireAuth(req: FastifyRequest): AuthContext {
+  if (!req.auth) throw unauthorized();
+  return req.auth;
+}
+
+/** Fastify preHandler: authenticated + permission, denial is audited. */
+export function requirePermission(db: Kysely<DB>, ...anyOf: Permission[]) {
+  return async (req: FastifyRequest) => {
+    const auth = requireAuth(req);
+    if (anyOf.some((p) => auth.permissions.includes(p))) return;
+    await audit(db, actorOf(req), { action: 'access_denied', entity: 'route', entityId: `${req.method} ${req.routeOptions.url ?? req.url}`, context: { required: anyOf } });
+    throw forbidden();
+  };
+}
+
+/**
+ * CSRF for state-changing requests: SameSite=Strict cookies + double-submit token bound to the
+ * session + Origin check against the configured web origin.
+ */
+export function csrfGuard(env: Env) {
+  return async (req: FastifyRequest, _reply: FastifyReply) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
+    checkOrigin(req, env);
+    if (!req.auth) return; // unauthenticated routes (login) rely on the origin check
+    const header = req.headers[CSRF_HEADER];
+    if (typeof header !== 'string' || !safeEqualHex(sha256(header), req.auth.csrfHash)) {
+      throw new HttpError(403, 'csrf', 'Requisição recusada por segurança. Recarregue a página e tente novamente.');
+    }
+  };
+}
+
+export function checkOrigin(req: FastifyRequest, env: Env) {
+  const origin = req.headers.origin;
+  if (origin && origin !== env.APP_ORIGIN) throw new HttpError(403, 'origem', 'Origem da requisição não autorizada.');
+}

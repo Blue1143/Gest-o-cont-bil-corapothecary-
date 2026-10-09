@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeForPeriods, getIndicator } from '@ccih/domain';
-import { generateFacts } from '../../data/demo/facts';
-import { DEMO_CONFIG, DEMO_SECTORS } from '../../data/demo/institution';
+import { DEMO_CONFIG, DEMO_SECTORS, generateFacts } from '@ccih/demo-data';
 import { periodWindow } from '../../app/filters';
 import { buildKpi, bundleAdherence, exposure, irasBySector, irasTrend, type DashboardInput } from './model';
 

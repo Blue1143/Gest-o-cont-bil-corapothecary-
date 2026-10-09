@@ -55,7 +55,8 @@ export function PlannedBlock({ title, phase, children }: { title: string; phase:
 }
 
 /** Aggregated (non-identifiable) chart data export, tagged with its provenance. */
-export function exportCsv<R>(filename: string, columns: Column<R>[], rows: R[], origin: 'demo' | 'real') {
+export function exportCsv<R>(filename: string, columns: Column<R>[], rows: R[], origin: 'demo' | 'real', log?: (e: { resource: string; rows: number }) => Promise<void>) {
+  void log?.({ resource: filename, rows: rows.length }).catch(() => undefined);
   const value = (c: Column<R>, r: R) => (c.value ? c.value(r) : ((r as Record<string, unknown>)[c.key] as string | number | null | undefined));
   const body = rows.map((r) => columns.map((c) => {
     const v = value(c, r);

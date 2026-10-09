@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { ROLE_LABEL, type RoleCode } from '@ccih/domain';
 import { EnvironmentBanner, Icon } from '@ccih/ui';
 import { useDataSource, useInstitution } from '../data/source';
+import { useSession } from '../features/auth/session';
+import { IdleWarning } from '../features/auth/IdleWarning';
 import { ErrorBoundary } from './ErrorBoundary';
 import { NAVIGATION } from './navigation';
 import { THEME_LABEL, useTheme } from './theme';
 
 export function AppShell() {
   const source = useDataSource();
+  const session = useSession();
   const institution = useInstitution();
   const [theme, cycleTheme] = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -15,10 +19,15 @@ export function AppShell() {
 
   useEffect(() => setMenuOpen(false), [pathname]);
 
+  // The banner follows the data, not only the source: an API backed by a demo database is still demo.
+  const demo = source.origin === 'demo' || institution.data?.provenance.origin === 'demo';
+  const roles = (session.info?.roles ?? []).map((r) => ROLE_LABEL[r as RoleCode] ?? r).join(', ');
+  const groups = NAVIGATION.map((g) => ({ ...g, items: g.items.filter((i) => session.can(...i.permissions)) })).filter((g) => g.items.length);
+
   return (
     <div className="app ig-root">
       <a className="skip-link" href="#conteudo">Pular para o conteúdo</a>
-      {source.origin === 'demo' ? <EnvironmentBanner /> : null}
+      {demo ? <EnvironmentBanner /> : null}
       <header className="topbar">
         <button type="button" className="ig-btn ig-btn-ghost ig-btn-sm topbar-menu" aria-expanded={menuOpen} aria-controls="menu-principal" onClick={() => setMenuOpen((o) => !o)}>
           <Icon name={menuOpen ? 'close' : 'menu'} size={18} />
@@ -33,11 +42,22 @@ export function AppShell() {
             <Icon name={theme === 'dark' ? 'moon' : 'sun'} size={16} />
             <span className="hide-sm">{THEME_LABEL[theme]}</span>
           </button>
+          {session.info ? (
+            <>
+              <span className="user-chip hide-sm" title={roles}>
+                <b>{session.info.user.displayName}</b>
+                <span>{roles}</span>
+              </span>
+              <button type="button" className="ig-btn ig-btn-sm" onClick={() => void session.logout('saida')}>
+                Sair
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
       <div className="layout">
         <nav id="menu-principal" className={menuOpen ? 'sidebar open' : 'sidebar'} aria-label="Principal">
-          {NAVIGATION.map((group, gi) => (
+          {groups.map((group, gi) => (
             <div key={gi} className="nav-group">
               {group.label ? <p className="nav-group-label">{group.label}</p> : null}
               <ul>
@@ -54,6 +74,7 @@ export function AppShell() {
           ))}
         </nav>
         <main id="conteudo" className="main" tabIndex={-1}>
+          <IdleWarning />
           <ErrorBoundary resetKey={pathname}>
             <Outlet />
           </ErrorBoundary>

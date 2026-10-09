@@ -2,32 +2,38 @@
 
 O sistema trata dados pessoais sensíveis de saúde (LGPD, art. 5º, II e art. 11). Este documento registra o que já está implementado e o que cada fase entrega.
 
-## Estado atual (Fase 1)
+## Controles implementados
 
-| Controle | Situação |
+| Controle | Implementação |
 | --- | --- |
-| Dados de pacientes reais | **Nenhum.** Somente dados sintéticos, marcados como demonstração em toda tela. |
-| Credenciais no repositório | Nenhuma. `.env` ignorado pelo git; `.env.example` sem segredos. |
-| Fallback acidental para demo | Bloqueado: build de produção sem `VITE_DATA_SOURCE` não inicia. |
-| Requisições a terceiros | Nenhuma: fontes servidas localmente (antes: Google Fonts). |
-| XSS | React escapa todo conteúdo; não há `dangerouslySetInnerHTML`. |
-| Exportação CSV | Separador `;`, escape de aspas e neutralização de injeção de fórmula (`=`, `+`, `-`, `@`); arquivos de demonstração prefixados `DEMO-` e com linha de origem. |
-| Exibição de paciente | Componentes usam iniciais + nº de prontuário. |
-| Erros | Sem stack trace para o usuário. |
+| Dados de pacientes | **Nenhum dado real.** Somente dados sintéticos (`data_origin = demo`), sinalizados em toda tela. |
+| Credenciais | Nenhuma no repositório. `.env` e `.seed-credentials.local` ignorados; seed gera senhas aleatórias. |
+| Senhas | argon2id (19 MiB, t=2, p=1), rehash automático. Política mínima (12+ caracteres, 3 classes) já aplicada às senhas definidas no seed; troca de senha pelo próprio usuário entra na Fase 4. |
+| Força bruta | Bloqueio da conta após `LOGIN_MAX_ATTEMPTS` (contador atômico) por `LOGIN_LOCK_MINUTES`; limite de login por IP (`LOGIN_RATE_LIMIT_PER_MINUTE`); limite global de requisições. |
+| Enumeração de usuários | Mesma mensagem e tempo de resposta para usuário inexistente, senha errada ou conta bloqueada. |
+| Sessão | Token aleatório de 256 bits (só o SHA-256 é armazenado); cookie `HttpOnly; SameSite=Strict; Secure` (obrigatório em produção); expiração por inatividade e tempo máximo no servidor; revogação em logout e quando perfis/escopo mudam; aviso de inatividade no cliente; cache do navegador descartado ao sair. |
+| CSRF | Token de dupla submissão ligado à sessão + verificação de `Origin`; cookies `SameSite=Strict`. |
+| Autorização (RBAC) | 31 permissões granulares, verificadas em **todo** endpoint no servidor; negações registradas no log. |
+| IDOR / escopo | Escopo por setor aplicado nas consultas; ids de setores e referências validados contra a instituição do usuário; UUIDs aleatórios (sem enumeração). |
+| Mass assignment | Esquemas zod `strict`; campos derivados (origem da meta, aprovador, direção) são definidos pelo servidor. |
+| SQL injection | Consultas parametrizadas (Kysely); identificadores dinâmicos validados. |
+| XSS | React escapa todo conteúdo; sem `dangerouslySetInnerHTML`; CSP `default-src 'none'` nas respostas da API. |
+| Redirecionamento aberto | Retorno após login aceita só caminhos internos; React Router 7.18 (corrige GHSA-wrjc-x8rr-h8h6). |
+| Cabeçalhos | Helmet: CSP, HSTS (com TLS), `nosniff`, `Referrer-Policy: no-referrer`, `frame-ancestors 'none'`; `Cache-Control: no-store` em toda resposta da API. |
+| Erros | Sem stack trace para o usuário; código da requisição para suporte; logs sem cookies, tokens ou senhas (redação no logger). |
+| Log de auditoria | Somente inserção: o papel de aplicação não tem UPDATE/DELETE/TRUNCATE e um trigger bloqueia essas operações até para o dono; cadeia de hashes verificável (`audit:verify` e botão em Administração); registra login/falha/saída/expiração, acesso negado, alterações com antes/depois e justificativa, validações, desbloqueios e exportações. Nunca registra senha ou hash. |
+| Privilégio mínimo no banco | Papel dono só para migrações; papel de aplicação com DML apenas. |
+| Exportação | CSV de dados agregados exige `export:aggregate`, é registrado no log e marcado `DEMO-` quando sintético; neutraliza injeção de fórmula. |
+| Dependências | `npm audit` sem vulnerabilidades; versões exatas; auditoria na CI. |
+| Requisições a terceiros | Nenhuma: fontes servidas localmente. |
 
-## Fase 2 (fundação)
+## Próximas fases
 
-- Autenticação por sessão (cookie `HttpOnly; Secure; SameSite=Strict`), argon2id, bloqueio progressivo, timeout de inatividade configurável, encerramento de sessão no servidor.
-- RBAC com permissões granulares e **validação no servidor** de toda operação; escopo por unidade/setor em toda consulta (proteção contra IDOR e enumeração; IDs UUID).
-- Esquemas de entrada com allowlist (sem mass assignment); consultas parametrizadas (sem SQL injection).
-- CSRF: SameSite=Strict + token de dupla submissão.
-- Cabeçalhos: CSP restritiva, HSTS, `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `frame-ancestors 'none'`.
-- Rate limiting em login e exportação.
-- `audit_log` somente-inserção com encadeamento de hash; registra visualização de dado identificado, exportações, alterações de resultado, liberações de CME, confirmação/descarte de IRAS, metas e permissões. Nunca registra senhas ou tokens.
-- Exportação identificável: exige permissão, confirmação explícita e registro; oferece versão pseudonimizada.
-- Uploads (Fase 5: anexos de Bowie-Dick): tipos permitidos por conteúdo, tamanho máximo, armazenamento fora da raiz web, nome gerado.
-- Criptografia em trânsito (TLS) e em repouso (disco/banco), nome completo de paciente cifrado em coluna.
-- Backups cifrados com teste de restauração; política de retenção definida com o DPO.
+- SSO (OIDC) e MFA conforme o provedor institucional.
+- Exportação de dados identificáveis com confirmação explícita, versão pseudonimizada e registro (Fase 7).
+- Uploads (anexos de Bowie-Dick, Fase 5): validação por conteúdo, tamanho máximo, armazenamento fora da raiz web, nome gerado.
+- Nome completo de paciente cifrado em coluna (Fase 3); TLS e criptografia em repouso na infraestrutura; backups cifrados com teste de restauração.
+- Monitoramento de segurança (picos de falhas de login, acessos negados) — Fase 8.
 
 ## Perfis iniciais
 

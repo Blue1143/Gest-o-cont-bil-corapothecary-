@@ -1,5 +1,4 @@
-import { emptyRules, type ClinicalReference, type IndicatorTarget, type InstitutionalConfig, type LoadReleasePolicy, type RuleParameter } from '@ccih/domain';
-import type { Sector, Unit } from '../port';
+import { emptyRules, type ClinicalReference, type IndicatorTarget, type InstitutionalConfig, type LoadReleasePolicy, type RuleParameter, type Sector, type Unit } from '@ccih/domain';
 
 /**
  * Demo institution. Every reference is pending institutional validation and every target is a
@@ -82,11 +81,11 @@ export const DEMO_UNITS: Unit[] = [
 ];
 
 export const DEMO_SECTORS: Sector[] = [
-  { id: 'uti-adulto', name: 'UTI Adulto', unitId: 'central', kind: 'uti' },
-  { id: 'uti-neo', name: 'UTI Neonatal', unitId: 'central', kind: 'uti' },
-  { id: 'uti-coronariana', name: 'UTI Coronariana', unitId: 'norte', kind: 'uti' },
-  { id: 'clinica-medica', name: 'Clínica Médica', unitId: 'central', kind: 'internacao' },
-  { id: 'clinica-cirurgica', name: 'Clínica Cirúrgica', unitId: 'norte', kind: 'internacao' },
-  { id: 'centro-cirurgico', name: 'Centro Cirúrgico', unitId: 'central', kind: 'centro_cirurgico' },
-  { id: 'cme', name: 'CME', unitId: 'central', kind: 'cme' },
+  { id: 'uti-adulto', code: 'uti-adulto', name: 'UTI Adulto', unitId: 'central', kind: 'uti' },
+  { id: 'uti-neo', code: 'uti-neo', name: 'UTI Neonatal', unitId: 'central', kind: 'uti' },
+  { id: 'uti-coronariana', code: 'uti-coronariana', name: 'UTI Coronariana', unitId: 'norte', kind: 'uti' },
+  { id: 'clinica-medica', code: 'clinica-medica', name: 'Clínica Médica', unitId: 'central', kind: 'internacao' },
+  { id: 'clinica-cirurgica', code: 'clinica-cirurgica', name: 'Clínica Cirúrgica', unitId: 'norte', kind: 'internacao' },
+  { id: 'centro-cirurgico', code: 'centro-cirurgico', name: 'Centro Cirúrgico', unitId: 'central', kind: 'centro_cirurgico' },
+  { id: 'cme', code: 'cme', name: 'CME', unitId: 'central', kind: 'cme' },
 ];

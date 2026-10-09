@@ -21,6 +21,8 @@ O PR só é aceito com tudo verde.
 8. **Exibir iniciais + prontuário** quando o nome completo não for necessário.
 9. **Toda regra nova tem teste** (`*.test.ts` ao lado do código).
 10. Textos de interface em pt-BR; identificadores de código em inglês.
+11. **Toda rota da API declara a permissão exigida** (`requirePermission`) e filtra por instituição e escopo. Toda alteração de configuração exige justificativa, usa `row_version` e chama `audit()` na mesma transação.
+12. Nova tabela = nova migração em `apps/api/src/db/migrations` (nunca editar uma migração já aplicada).
 
 ## Commits
 
@@ -33,5 +35,5 @@ Mensagens no imperativo, curtas, explicando o porquê quando não for óbvio. N�
 | Unitário (regras, cálculos, formatação) | `packages/domain/src/**/*.test.ts` | Vitest |
 | Componentes | `packages/ui/src/**/*.test.tsx` | Vitest + Testing Library |
 | Aplicação (rotas, filtros, fonte de dados) | `apps/web/src/**/*.test.tsx` | Vitest + Testing Library |
-| Integração API | `apps/api` (Fase 2) | Vitest + PostgreSQL de teste |
+| Integração API | `apps/api/test` — banco `ccih_test` recriado a cada execução | Vitest + PostgreSQL 16 |
 | E2E (fluxos IRAS e CME) | `e2e/` (Fase 3+) | Playwright |

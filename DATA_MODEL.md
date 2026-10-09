@@ -1,9 +1,9 @@
 # Modelo de dados — CCIH Integra
 
-Modelo relacional alvo (PostgreSQL). A Fase 1 implementa o domínio puro (`packages/domain`) e uma fonte de dados de demonstração; as tabelas abaixo são criadas por migrações a partir da Fase 2. Convenções:
+Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/api/src/db/migrations/0001_foundation.ts`): instituição, unidade, setor, leito, cargo/função, profissional, perfil, usuário, perfil do usuário, escopo do usuário, sessão, log de auditoria, referência clínica, parâmetro de regra, meta de indicador, política de liberação da CME e fatos mensais de indicadores. As demais seções são o modelo alvo das fases seguintes. Convenções:
 
-- Chave primária `id` UUID v7 (não sequencial → sem enumeração de IDs). Números humanos (prontuário, ciclo, lote) são colunas próprias com índice único por instituição.
-- Toda tabela de negócio tem `institution_id` (isolamento multi-instituição), `created_at`, `created_by`, `updated_at`, `updated_by`, `version` (bloqueio otimista).
+- Chave primária `id` UUID aleatório (`gen_random_uuid()`, não sequencial → sem enumeração). Números humanos (prontuário, ciclo, lote) são colunas próprias com índice único por instituição.
+- Toda tabela de negócio tem `institution_id` (isolamento multi-instituição) e as editáveis têm `updated_at` e `row_version` (bloqueio otimista). Quem alterou e por quê fica no `audit_log`.
 - Nada clínico é apagado fisicamente: `deleted_at` + motivo, sempre com registro em `audit_log`.
 - Resultados críticos (teste de CME, resultado de cultura, status de IRAS, liberação de carga) **não são sobrescritos**: cada mudança cria nova linha de histórico/decisão e entra no `audit_log`.
 - Todo dado carrega `data_origin` (`real` | `demo`); a interface sinaliza qualquer dado `demo`.
@@ -20,8 +20,8 @@ Modelo relacional alvo (PostgreSQL). A Fase 1 implementa o domínio puro (`packa
 | `app_user` | login, hash de senha (argon2id), MFA, bloqueado, último acesso | N—N perfis; N—1 profissional |
 | `role` | código (`admin`, `enf_ccih`, `infectologista`, `cme`, `auditor`, `gestor`, `consulta`) | N—N permissões |
 | `permission` | código granular (`iras:confirm`, `cme:release_load`, `patient:view_identified`, `export:identified`…) | |
-| `user_scope` | usuário × unidade/setor | restringe linhas visíveis (anti-IDOR) |
-| `session` | token hash, expira em, IP, user-agent | N—1 usuário |
+| `user_scope` | usuário × setor (`app_user.scope_all` = todos) | restringe linhas visíveis (anti-IDOR) |
+| `session` | hash do token, hash do CSRF, último uso, expira em, IP, user-agent, revogação e motivo | N—1 usuário |
 | `audit_log` | ver §6 | |
 
 ## 2. Paciente e assistência
@@ -105,7 +105,7 @@ Rastreabilidade: `patient → surgery → surgery_material_use → load_item →
 
 ## 9. Auditoria (log)
 
-`audit_log`: `id`, `occurred_at`, `user_id`, `action` (`create`, `update`, `delete`, `view_identified`, `export`, `login`, `permission_change`…), `entity`, `entity_id`, `before` (JSON), `after` (JSON), `ip`, `user_agent`, `context`, `prev_hash`, `hash`.
+`audit_log`: `id`, `occurred_at`, `institution_id`, `user_id`, `user_login`, `action` (`login_success`, `login_failure`, `logout`, `session_expired`, `access_denied`, `create`, `update`, `delete`, `validate`, `unlock`, `export`, `seed`), `entity`, `entity_id`, `before` (JSON), `after` (JSON), `ip` (texto), `user_agent`, `context` (inclui a justificativa), `prev_hash`, `hash`.
 
 - Somente `INSERT` para o papel da aplicação; `UPDATE`/`DELETE` bloqueados por permissão e por trigger.
 - Encadeamento de hash (`hash = sha256(prev_hash || registro)`) torna adulteração detectável; verificação periódica.
@@ -113,4 +113,4 @@ Rastreabilidade: `patient → surgery → surgery_material_use → load_item →
 
 ## 10. Indicadores
 
-Indicadores não têm tabela de valores: são **derivados** de fatos (censo, casos, auditorias, ciclos…) pelo motor `computeIndicator` (numerador ÷ denominador × multiplicador). O catálogo (`INDICATORS`) define fórmula, unidade, direção e agregação (`fluxo` soma períodos; `estoque` usa o último). Metas ficam em `indicator_target`.
+Indicadores não têm tabela de valores: são **derivados** de fatos pelo motor `computeIndicator` (numerador ÷ denominador × multiplicador). Na Fase 2, os fatos mensais por setor e métrica ficam em `indicator_fact` (carregados pelo seed sintético); a partir da Fase 3 eles passam a ser consolidados a partir das entidades clínicas (censo, casos, auditorias, ciclos). O catálogo (`INDICATORS`) define fórmula, unidade, direção e agregação (`fluxo` soma períodos; `estoque` usa o último). Metas ficam em `indicator_target`.

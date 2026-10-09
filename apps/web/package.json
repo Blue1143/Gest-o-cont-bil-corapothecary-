@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ccih/demo-data": "0.1.0",
     "@ccih/domain": "0.1.0",
     "@ccih/ui": "0.1.0",
     "@tanstack/react-query": "5.90.21",

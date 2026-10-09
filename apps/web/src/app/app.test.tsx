@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { routes } from './routes';
 import { DataSourceProvider, createDataSource, DataSourceConfigError } from '../data/source';
+import { SessionProvider } from '../features/auth/session';
 import { DemoDataSource } from '../data/demo/DemoDataSource';
 import type { CcihDataSource } from '../data/port';
 
@@ -14,7 +15,9 @@ function renderApp(path: string, source: CcihDataSource = new DemoDataSource(() 
   render(
     <QueryClientProvider client={client}>
       <DataSourceProvider source={source}>
-        <RouterProvider router={router} />
+        <SessionProvider>
+          <RouterProvider router={router} />
+        </SessionProvider>
       </DataSourceProvider>
     </QueryClientProvider>,
   );
@@ -45,9 +48,10 @@ describe('app', () => {
   });
 
   it('lists references as pending institutional validation', async () => {
-    renderApp('/admin');
+    renderApp('/admin/referencias');
     expect(await screen.findByText('Referências clínicas e regulatórias')).toBeInTheDocument();
     expect(screen.getAllByText('Requer validação institucional').length).toBeGreaterThan(0);
+    expect(screen.getByText('Modo demonstração: configurações apenas exibidas')).toBeInTheDocument();
   });
 
   it('never falls back to demo data in a production build without configuration', async () => {

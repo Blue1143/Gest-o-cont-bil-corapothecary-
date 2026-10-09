@@ -7,6 +7,7 @@ import '@ccih/ui/styles.css';
 import './app/app.css';
 import { routes } from './app/routes';
 import { createDataSource, DataSourceConfigError, DataSourceProvider } from './data/source';
+import { SessionProvider } from './features/auth/session';
 import type { CcihDataSource } from './data/port';
 
 const root = createRoot(document.getElementById('root')!);
@@ -18,7 +19,9 @@ function renderApp(source: CcihDataSource) {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <DataSourceProvider source={source}>
-          <RouterProvider router={router} />
+          <SessionProvider>
+            <RouterProvider router={router} />
+          </SessionProvider>
         </DataSourceProvider>
       </QueryClientProvider>
     </StrictMode>,
