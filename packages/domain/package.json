@@ -1,0 +1,12 @@
+{
+  "name": "@ccih/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Regras de domínio, configuração institucional e motor de indicadores do CCIH Integra (TypeScript puro, sem UI).",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}
