@@ -37,10 +37,10 @@ export const NAVIGATION: NavGroup[] = [
   {
     label: 'Prevenção e qualidade',
     items: [
-      { path: '/bundles', permissions: ['quality:view'], label: 'Bundles', phase: 4, summary: 'Auditoria de bundles configuráveis com adesão, tendência e Pareto.' },
-      { path: '/auditorias', permissions: ['quality:view'], label: 'Auditorias', phase: 4, summary: 'Auditorias, não conformidades e planos de ação (5W2H).' },
-      { path: '/treinamentos', permissions: ['quality:view'], label: 'Treinamentos', phase: 4, summary: 'Treinamentos, presença, avaliação, cobertura e vencimentos.' },
-      { path: '/insumos', permissions: ['quality:view'], label: 'Insumos', phase: 4, summary: 'Estoque, validade e disponibilidade de insumos de prevenção.' },
+      { path: '/bundles', permissions: ['quality:view'], label: 'Bundles e higiene das mãos', phase: null, summary: 'Auditoria de bundles configuráveis e observação de higiene das mãos, com adesão e Pareto.' },
+      { path: '/auditorias', permissions: ['quality:view'], label: 'Auditorias', phase: null, summary: 'Auditorias, não conformidades e planos de ação (5W2H).' },
+      { path: '/treinamentos', permissions: ['quality:view'], label: 'Treinamentos', phase: null, summary: 'Treinamentos, presença, cobertura e vencimentos.' },
+      { path: '/insumos', permissions: ['quality:view'], label: 'Insumos', phase: null, summary: 'Estoque por lote, validade e cobertura de insumos de prevenção.' },
     ],
   },
   {
@@ -55,7 +55,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { path: '/indicadores', permissions: ['indicators:view'], label: 'Indicadores', phase: null, summary: 'Catálogo de indicadores com fórmula, fonte e meta.' },
       { path: '/relatorios', permissions: ['reports:view'], label: 'Relatórios', phase: 7, summary: 'Relatórios com filtros, impressão, PDF e CSV.' },
-      { path: '/alertas', permissions: ['alerts:view'], label: 'Alertas', phase: 4, summary: 'Central de alertas com prioridade, responsável e controle de alert fatigue.' },
+      { path: '/alertas', permissions: ['alerts:view'], label: 'Alertas', phase: null, summary: 'Central de alertas com prioridade, responsável e controle de excesso de alertas.' },
       { path: '/admin', permissions: ['config:view', 'users:view', 'audit:view'], label: 'Administração', phase: null, summary: 'Metas, parâmetros, referências, política da CME, usuários, perfis e log de auditoria.' },
     ],
   },

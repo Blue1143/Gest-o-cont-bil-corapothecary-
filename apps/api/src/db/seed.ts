@@ -6,6 +6,7 @@ import { audit } from '../audit/audit';
 import { hashPassword, passwordProblem } from '../security/crypto';
 import { consolidateMonths } from '../repositories/consolidation';
 import { seedClinical } from './seed-clinical';
+import { seedOperations } from './seed-operations';
 import type { DB } from './types';
 
 /** Synthetic users, one per initial profile. Logins are fictitious; passwords are never stored in code. */
@@ -113,9 +114,10 @@ export async function seedDemo(db: Kysely<DB>, opts: SeedOptions = {}): Promise<
     // months' clinical metrics are then consolidated from those records (same path as production).
     const clinicalFrom = addMonths(anchor, -1);
     const clinical = await seedClinical(trx, { institutionId, sectorIds, refIds, from: clinicalFrom, now, timezone: DEMO_CONFIG.timezone });
+    const operations = await seedOperations(trx, { institutionId, sectorIds, from: clinicalFrom, now, timezone: DEMO_CONFIG.timezone });
     await consolidateMonths(trx, institutionId, [clinicalFrom, anchor], now);
 
-    await audit(trx, { institutionId, userId: null, login: 'seed', ip: null, userAgent: null }, { action: 'seed', entity: 'institution', entityId: institutionId, context: { origin: 'demo', users: DEMO_USERS.length, facts: facts.length, ...clinical } });
+    await audit(trx, { institutionId, userId: null, login: 'seed', ip: null, userAgent: null }, { action: 'seed', entity: 'institution', entityId: institutionId, context: { origin: 'demo', users: DEMO_USERS.length, facts: facts.length, ...clinical, ...operations } });
     return { institutionId, credentials, facts: facts.length, clinical };
   });
 }

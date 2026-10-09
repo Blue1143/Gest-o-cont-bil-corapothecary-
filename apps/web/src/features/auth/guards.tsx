@@ -19,6 +19,8 @@ export function RequireSession({ children }: { children: ReactNode }) {
     const qs = params.toString();
     return <Navigate to={`/entrar${qs ? `?${qs}` : ''}`} replace />;
   }
+  // Temporary or expired password: only "Minha conta" is reachable (the API enforces the same).
+  if (session.info?.mustChangePassword && location.pathname !== '/conta') return <Navigate to="/conta" replace />;
   return <>{children}</>;
 }
 

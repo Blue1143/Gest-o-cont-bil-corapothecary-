@@ -1,6 +1,8 @@
 import type {
   CensusMonthPayload, CensusPayload, CultureDetail, CultureSummary, DataOrigin, FactRow, InstitutionData, InvestigationStatus, IrasCaseDetail, IrasCaseSummary,
   MetricKey, OrgPayload, Paged, PatientDetail, PatientSummary, Permission, Procedure, Professional, SterilizationTestType, SurgeryDetail, SurgerySummary, WithProvenance,
+  AlertDto, AlertSummary, BundleAuditDto, BundleSummary, BundleTemplateDto, HandHygieneDto, HandHygieneSummaryRow, NonconformityDetail, NonconformityDto,
+  QualityAuditDetail, QualityAuditDto, StaffMember, SupplyDto, SupplyMovementDto, SurveillanceRow, TrainingCoveragePayload, TrainingDto, TrainingSessionDto,
 } from '@ccih/domain';
 
 export type { InstitutionData, Sector, SectorKind, Unit } from '@ccih/domain';
@@ -22,6 +24,8 @@ export interface SessionInfo {
   /** null = every sector of the institution. */
   scope: string[] | null;
   session: { expiresAt: string; idleExpiresAt: string; idleMinutes: number };
+  /** Temporary or expired password: the app only allows the password change. */
+  mustChangePassword?: boolean;
 }
 
 export interface AuthPort {
@@ -29,6 +33,7 @@ export interface AuthPort {
   me(): Promise<SessionInfo | null>;
   login(login: string, password: string): Promise<void>;
   logout(): Promise<void>;
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
 }
 
 export interface ConfigVersions {
@@ -130,6 +135,8 @@ export interface AdminPort {
   audit(query: { entity?: string; action?: string; page: number; pageSize: number }): Promise<AuditPage>;
   verifyAudit(): Promise<{ ok: boolean; checked: number; brokenAtId: string | null }>;
   logExport(event: { resource: string; rows: number; filters?: Record<string, string> }): Promise<void>;
+  createUser(input: Justified & { login: string; displayName: string; roles: string[]; scopeAll: boolean; sectorIds: string[] }): Promise<{ id: string; temporaryPassword: string }>;
+  resetPassword(id: string, justification: string): Promise<{ temporaryPassword: string }>;
 }
 
 /* ---------- Clinical (Phase 3) ---------- */
@@ -199,6 +206,59 @@ export interface OrgAdminPort {
   updateBed(id: string, input: Justified & { active: boolean }): Promise<void>;
 }
 
+/* ---------- Operations (Phase 4) ---------- */
+
+export interface TemplateInput extends Justified {
+  code: string; name: string; metric: 'cvc' | 'vm' | 'svd' | null; method: 'tudo_ou_nada' | 'por_item'; referenceId: string | null; active: boolean;
+  items: Array<{ id: string | null; label: string }>; rowVersion: number | null;
+}
+export interface ActionInput { what: string; why: string; where: string; who: string; dueOn: string; how: string; howMuch: string | null }
+export interface TrainingInput extends Justified {
+  id: string | null; title: string; theme: string; mandatory: boolean; validityMonths: number | null; targetJobRoleIds: string[]; description: string | null; active: boolean; rowVersion: number | null;
+}
+export interface SupplyInput extends Justified { code: string; name: string; category: string; unit: string; minCoverageDays: number | null; active: boolean; rowVersion: number | null }
+export interface MovementInput { kind: 'entrada' | 'consumo' | 'ajuste' | 'descarte'; lot: string; expiresOn: string | null; quantity: number; sectorId: string | null; occurredAt: string; reason: string | null }
+
+export interface OperationsPort {
+  bundleTemplates(): Promise<{ templates: BundleTemplateDto[] }>;
+  saveBundleTemplate(input: TemplateInput): Promise<void>;
+  bundleAudits(q: Query): Promise<Paged<BundleAuditDto>>;
+  createBundleAudit(input: { templateId: string; sectorId: string; admissionId: string | null; auditedAt: string; notes: string | null; answers: Array<{ itemId: string; answer: string }> }): Promise<{ id: string; result: string; nonCompliant: number }>;
+  voidBundleAudit(id: string, reason: string): Promise<void>;
+  bundleSummary(q: Query): Promise<BundleSummary>;
+  handHygiene(q: Query): Promise<Paged<HandHygieneDto> & { summary: HandHygieneSummaryRow[] }>;
+  createHandHygiene(input: { sectorId: string; observedAt: string; category: string; opportunities: number; actions: number }): Promise<void>;
+  voidHandHygiene(id: string, reason: string): Promise<void>;
+  qualityAudits(): Promise<{ audits: QualityAuditDto[] }>;
+  qualityAudit(id: string): Promise<QualityAuditDetail>;
+  createQualityAudit(input: Justified & { title: string; kind: string; sectorId: string | null; scope: string | null; plannedFor: string }): Promise<{ id: string }>;
+  updateQualityAudit(id: string, input: Justified & { title: string; scope: string | null; plannedFor: string; findings: string | null; rowVersion: number }): Promise<void>;
+  changeAuditStatus(id: string, input: Justified & { to: string; rowVersion: number }): Promise<void>;
+  nonconformities(status?: string): Promise<{ nonconformities: NonconformityDto[] }>;
+  nonconformity(id: string): Promise<NonconformityDetail>;
+  createNonconformity(input: Justified & { auditId: string | null; sectorId: string | null; origin: string; severity: string; description: string; detectedOn: string }): Promise<{ id: string }>;
+  changeNcStatus(id: string, input: Justified & { to: string; effectiveness: string | null; rowVersion: number }): Promise<void>;
+  addAction(ncId: string, input: ActionInput): Promise<void>;
+  changeActionStatus(id: string, input: Justified & { status: string; completedOn: string | null; rowVersion: number }): Promise<void>;
+  alerts(q: Query): Promise<Paged<AlertDto>>;
+  alertSummary(): Promise<AlertSummary>;
+  refreshAlerts(): Promise<{ created: number; resolved: number }>;
+  assumeAlert(id: string, rowVersion: number): Promise<void>;
+  closeAlert(id: string, resolution: string, rowVersion: number): Promise<void>;
+  staff(): Promise<{ staff: StaffMember[]; jobRoles: Array<{ id: string; name: string }> }>;
+  createStaff(input: Justified & { name: string; registration: string | null; jobRoleId: string; sectorId: string }): Promise<void>;
+  trainings(): Promise<{ trainings: TrainingDto[]; sessions: TrainingSessionDto[] }>;
+  trainingCoverage(): Promise<TrainingCoveragePayload>;
+  saveTraining(input: TrainingInput): Promise<void>;
+  createSession(trainingId: string, input: { heldOn: string; instructor: string; hours: number; sectorId: string | null; notes: string | null; attendees: Array<{ professionalId: string; present: boolean; score: number | null }> }): Promise<void>;
+  supplies(): Promise<{ supplies: SupplyDto[] }>;
+  supplyMovements(id: string): Promise<{ movements: SupplyMovementDto[] }>;
+  saveSupply(input: SupplyInput): Promise<void>;
+  addMovement(supplyId: string, input: MovementInput): Promise<void>;
+  surveillance(pending: boolean): Promise<{ rows: SurveillanceRow[]; ruleMissing: boolean }>;
+  addFollowup(surgeryId: string, input: { contactedOn: string; method: string; outcome: string; notes: string | null; openCase: boolean }): Promise<{ caseId: string | null }>;
+}
+
 export interface CcihDataSource {
   readonly origin: DataOrigin;
   readonly auth?: AuthPort;
@@ -206,6 +266,7 @@ export interface CcihDataSource {
   /** Clinical modules exist only with the backend (no synthetic patients in the browser). */
   readonly clinical?: ClinicalPort;
   readonly orgAdmin?: OrgAdminPort;
+  readonly operations?: OperationsPort;
   getInstitution(): Promise<WithProvenance<InstitutionData>>;
   getFacts(query: FactsQuery): Promise<WithProvenance<{ rows: FactRow[] }>>;
 }

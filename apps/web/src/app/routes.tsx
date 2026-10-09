@@ -29,6 +29,14 @@ const SurgeryPage = named(() => import('../features/clinical/SurgeryPages'), 'Su
 const CulturesPage = named(() => import('../features/clinical/MicroPages'), 'CulturesPage');
 const CulturePage = named(() => import('../features/clinical/MicroPages'), 'CulturePage');
 const CensusPage = named(() => import('../features/clinical/CensusPage'), 'CensusPage');
+const BundlesPage = named(() => import('../features/operations/BundlesPage'), 'BundlesPage');
+const AuditsPage = named(() => import('../features/operations/AuditsPages'), 'AuditsPage');
+const AuditDetailPage = named(() => import('../features/operations/AuditsPages'), 'AuditDetailPage');
+const NcDetailPage = named(() => import('../features/operations/AuditsPages'), 'NcDetailPage');
+const TrainingsPage = named(() => import('../features/operations/TrainingsPage'), 'TrainingsPage');
+const SuppliesPage = named(() => import('../features/operations/SuppliesPage'), 'SuppliesPage');
+const AlertsPage = named(() => import('../features/operations/AlertsPage'), 'AlertsPage');
+const AccountPage = named(() => import('../features/auth/AccountPage'), 'AccountPage');
 
 const page = (el: ReactElement) => <Suspense fallback={<div className="page"><LoadingState /></div>}>{el}</Suspense>;
 const guarded = (anyOf: Permission[], el: ReactElement) => <Guard anyOf={anyOf}>{page(el)}</Guard>;
@@ -50,6 +58,14 @@ export const routes: RouteObject[] = [
       { path: 'microbiologia', element: guarded(['micro:view'], <CulturesPage />) },
       { path: 'microbiologia/:id', element: guarded(['micro:view'], <CulturePage />) },
       { path: 'censo', element: guarded(['patient:view', 'indicators:view'], <CensusPage />) },
+      { path: 'bundles', element: guarded(['quality:view'], <BundlesPage />) },
+      { path: 'auditorias', element: guarded(['quality:view'], <AuditsPage />) },
+      { path: 'auditorias/nao-conformidades/:id', element: guarded(['quality:view'], <NcDetailPage />) },
+      { path: 'auditorias/:id', element: guarded(['quality:view'], <AuditDetailPage />) },
+      { path: 'treinamentos', element: guarded(['quality:view'], <TrainingsPage />) },
+      { path: 'insumos', element: guarded(['quality:view'], <SuppliesPage />) },
+      { path: 'alertas', element: guarded(['alerts:view'], <AlertsPage />) },
+      { path: 'conta', element: page(<AccountPage />) },
       {
         path: 'admin',
         element: guarded(['config:view', 'users:view', 'audit:view'], <AdminLayout />),

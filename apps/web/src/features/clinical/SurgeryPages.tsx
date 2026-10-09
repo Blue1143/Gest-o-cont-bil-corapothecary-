@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { WOUND_CLASS_LABEL, evaluateProphylaxis, formatDate, formatNumber, type SurgerySummary, type WoundClass } from '@ccih/domain';
-import { AlertBanner, Button, Card, DataTable, EmptyState, ErrorState, InfectionTag, LoadingState, ProvenanceTag, StatusBadge, type Column } from '@ccih/ui';
+import { FOLLOWUP_METHOD_LABEL, FOLLOWUP_OUTCOME_LABEL, WOUND_CLASS_LABEL, evaluateProphylaxis, formatDate, formatNumber, todayIn, type FollowupMethod, type FollowupOutcome, type SurgeryDetail, type SurgerySummary, type WoundClass } from '@ccih/domain';
+import { AlertBanner, Button, Card, DataTable, EmptyState, ErrorState, Field, FormMessage, InfectionTag, LoadingState, ProvenanceTag, StatusBadge, SubNav, type Column } from '@ccih/ui';
 import { useSession } from '../auth/session';
-import { useInstitution } from '../../data/source';
+import { useDataSource, useInstitution } from '../../data/source';
+import { useAdminMutation } from '../admin/shared';
 import { ApiError } from '../../data/api/http';
 import { ProphylaxisBadge, SurgeryForm } from './surgery-forms';
 import { CaseStatusBadge, DemoTag, PageHeader, Pager, PatientLabel, RequireClinical, useClinical, useTimeZone } from './shared';
@@ -53,6 +54,9 @@ function Surgeries() {
   return (
     <div className="page">
       <PageHeader title="Cirurgias" subtitle="Registro cirúrgico, risco, antibioticoprofilaxia (pela janela configurada) e vigilância de ISC. Novas cirurgias são registradas a partir da página do paciente." />
+      <SubNav label="Seções" items={[{ key: 'registro', label: 'Registro cirúrgico' }, { key: 'pos-alta', label: 'Vigilância pós-alta' }].map((x) => ({ ...x, href: `/cirurgias?secao=${x.key}`, active: (get('secao') || 'registro') === x.key }))}
+        renderLink={(item, className) => <Link to={item.href} replace className={className} aria-current={item.active ? 'page' : undefined}>{item.label}</Link>} />
+      {get('secao') === 'pos-alta' ? <SurveillanceList /> : <>
       <form className="filters" role="search" onSubmit={(e) => { e.preventDefault(); set('q', search.trim()); }}>
         <div className="field"><label htmlFor="cir-de">De</label><input id="cir-de" type="date" className="select" value={get('de')} onChange={(e) => set('de', e.target.value)} /></div>
         <div className="field"><label htmlFor="cir-ate">Até</label><input id="cir-ate" type="date" className="select" value={get('ate')} onChange={(e) => set('ate', e.target.value)} /></div>
@@ -82,6 +86,7 @@ function Surgeries() {
       </form>
       <DataTable caption="Cirurgias" columns={columns} rows={list.data?.rows ?? []} rowKey={(s) => s.id} state={list.isPending ? 'loading' : list.isError ? 'error' : 'ready'} onRetry={() => void list.refetch()} />
       {list.data ? <Pager page={page} pageSize={list.data.pageSize} total={list.data.total} onPage={(p) => set('pagina', String(p))} /> : null}
+      </>}
     </div>
   );
 }
@@ -154,6 +159,71 @@ function Surgery() {
           </div>
         </Card>
       </div>
+      <FollowupsCard surgery={s} />
     </div>
+  );
+}
+
+/** Post-discharge contacts (append-only); a suspicion may open an SSI case in the IRAS workflow. */
+function FollowupsCard({ surgery }: { surgery: SurgeryDetail }) {
+  const ops = useDataSource().operations;
+  const session = useSession();
+  const tz = useTimeZone();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [d, setD] = useState({ contactedOn: todayIn(tz), method: 'telefone' as FollowupMethod, outcome: 'sem_sinais' as FollowupOutcome, notes: '', openCase: false });
+  const m = useAdminMutation(() => ops!.addFollowup(surgery.id, { contactedOn: d.contactedOn, method: d.method, outcome: d.outcome, notes: d.notes.trim() || null, openCase: d.outcome === 'suspeita' && d.openCase }), ['surgery', 'surveillance', 'cases', 'alerts']);
+  return (
+    <Card title="Vigilância pós-alta" subtitle={surgery.dischargedAt ? `Alta em ${formatDate(surgery.dischargedAt, tz)}. Contatos não podem ser editados.` : 'Paciente ainda internado.'}
+      actions={ops && session.can('surgery:edit') && !open ? <Button size="sm" onClick={() => setOpen(true)}>Registrar contato</Button> : null}>
+      {open ? (
+        <form className="ig-form" noValidate onSubmit={(e) => { e.preventDefault(); m.mutation.mutate(undefined, { onSuccess: (r) => { setOpen(false); if (r.caseId) navigate(`/vigilancia/${r.caseId}`); } }); }}>
+          {m.formError ? <FormMessage tone="error">{m.formError}</FormMessage> : null}
+          <div className="ig-form-row">
+            <Field label="Data do contato" required error={m.fieldErrors.contactedOn ?? null}><input type="date" value={d.contactedOn} max={todayIn(tz)} onChange={(e) => setD({ ...d, contactedOn: e.target.value })} /></Field>
+            <Field label="Meio" required><select value={d.method} onChange={(e) => setD({ ...d, method: e.target.value as FollowupMethod })}>{Object.entries(FOLLOWUP_METHOD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
+            <Field label="Resultado" required><select value={d.outcome} onChange={(e) => setD({ ...d, outcome: e.target.value as FollowupOutcome })}>{Object.entries(FOLLOWUP_OUTCOME_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
+          </div>
+          <Field label="Observações"><textarea value={d.notes} maxLength={1000} onChange={(e) => setD({ ...d, notes: e.target.value })} /></Field>
+          {d.outcome === 'suspeita' && session.can('iras:edit') ? <label className="ig-row" style={{ gap: 8 }}><input type="checkbox" checked={d.openCase} onChange={(e) => setD({ ...d, openCase: e.target.checked })} /> Abrir suspeita de ISC na Vigilância IRAS</label> : null}
+          <div className="ig-form-actions"><Button type="submit" variant="primary" disabled={m.mutation.isPending}>Registrar contato</Button><Button onClick={() => setOpen(false)}>Cancelar</Button></div>
+        </form>
+      ) : null}
+      {surgery.followups.length ? (
+        <ul className="ig-list">
+          {surgery.followups.map((f) => (
+            <li key={f.id}>
+              <span>{formatDate(f.contactedOn)} · {FOLLOWUP_METHOD_LABEL[f.method]} · {f.by}{f.notes ? <span className="ig-small ig-muted"> · {f.notes}</span> : null}</span>
+              <span className="ig-row" style={{ gap: 6 }}>{f.caseId ? <Link to={`/vigilancia/${f.caseId}`}>Caso aberto</Link> : null}<StatusBadge status={f.outcome === 'suspeita' ? 'crit' : f.outcome === 'nao_localizado' ? 'warn' : 'ok'}>{FOLLOWUP_OUTCOME_LABEL[f.outcome]}</StatusBadge></span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="ig-small ig-muted">Nenhum contato registrado.</p>}
+    </Card>
+  );
+}
+
+/** Open surveillance windows, most urgent first (no contact after discharge). */
+function SurveillanceList() {
+  const ops = useDataSource().operations;
+  const tz = useTimeZone();
+  const [pending, setPending] = useState(true);
+  const q = useQuery({ queryKey: ['surveillance', pending], enabled: !!ops, queryFn: () => ops!.surveillance(pending) });
+  if (!ops) return null;
+  return (
+    <>
+      <label className="ig-row" style={{ gap: 6 }}><input type="checkbox" checked={pending} onChange={(e) => setPending(e.target.checked)} /> Só altas sem nenhum contato</label>
+      {q.data?.ruleMissing ? <AlertBanner tone="warn" title="Prazo de vigilância não configurado">Configure os dias de vigilância pós-operatória em Administração › Parâmetros.</AlertBanner> : null}
+      <DataTable caption="Janelas de vigilância de ISC abertas" rows={(q.data?.rows ?? []).slice().sort((a, b) => a.windowEnd.localeCompare(b.windowEnd))} rowKey={(r) => r.surgeryId} state={q.isPending ? 'loading' : q.isError ? 'error' : 'ready'} pageSize={20}
+        columns={[
+          { key: 'patient', label: 'Paciente', value: (r) => r.patient.recordNumber, render: (r) => <PatientLabel patient={r.patient} /> },
+          { key: 'procedure', label: 'Procedimento', render: (r) => <Link to={`/cirurgias/${r.surgeryId}`}>{r.procedure}</Link>, value: (r) => r.procedure },
+          { key: 'surgeryDate', label: 'Cirurgia', value: (r) => r.surgeryDate, render: (r) => formatDate(r.surgeryDate, tz) },
+          { key: 'dischargedAt', label: 'Alta', value: (r) => r.dischargedAt ?? '', render: (r) => (r.dischargedAt ? formatDate(r.dischargedAt, tz) : 'Internado') },
+          { key: 'windowEnd', label: 'Vigilância até', value: (r) => r.windowEnd, render: (r) => `${formatDate(r.windowEnd)}${r.implant ? ' (implante)' : ''}` },
+          { key: 'contacts', label: 'Contatos', align: 'right', render: (r) => (r.contacts ? `${r.contacts} · último ${formatDate(r.lastContact)}` : 'Nenhum') },
+          { key: 'suspicion', label: 'Suspeita', value: (r) => (r.suspicion ? 1 : 0), render: (r) => (r.suspicion ? <StatusBadge status="crit">Sim</StatusBadge> : '—') },
+        ]} />
+    </>
   );
 }

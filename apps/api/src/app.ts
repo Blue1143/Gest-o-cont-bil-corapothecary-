@@ -16,6 +16,9 @@ import { patientRoutes } from './routes/patients';
 import { irasRoutes } from './routes/iras';
 import { surgeryMicroRoutes } from './routes/surgery-micro';
 import { FieldCipher } from './security/field-crypto';
+import { qualityRoutes } from './routes/quality';
+import { trainingSupplyRoutes } from './routes/training-supplies';
+import { alertRoutes } from './routes/alerts';
 
 export interface AppOptions {
   db: Kysely<DB>;
@@ -80,6 +83,9 @@ export async function buildApp({ db, env, logger = true }: AppOptions): Promise<
       await api.register(patientRoutes, { db, cipher: FieldCipher.fromEnv(env.FIELD_ENCRYPTION_KEY) });
       await api.register(irasRoutes, { db });
       await api.register(surgeryMicroRoutes, { db });
+      await api.register(qualityRoutes, { db });
+      await api.register(trainingSupplyRoutes, { db });
+      await api.register(alertRoutes, { db });
     },
     { prefix: '/api' },
   );

@@ -34,6 +34,7 @@ export const PERMISSIONS = {
   'cme:release': 'Liberar, reter ou rejeitar cargas',
   'quality:view': 'Ver bundles, auditorias, treinamentos e insumos',
   'quality:edit': 'Registrar bundles, auditorias, treinamentos e insumos',
+  'quality:configure': 'Configurar modelos de bundle, catálogo de treinamentos e de insumos',
   'alerts:view': 'Ver alertas',
   'alerts:manage': 'Assumir e encerrar alertas',
   'export:aggregate': 'Exportar dados agregados',
@@ -63,7 +64,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
   enf_ccih: [
     ...VIEW_CORE, 'reports:view', 'config:view', 'config:references:validate', 'indicators:consolidate',
     'patient:view', 'patient:view_identified', 'patient:edit', 'iras:view', 'iras:edit', 'iras:decide', 'surgery:view', 'surgery:edit',
-    'micro:view', 'atm:view', 'cme:view', 'quality:view', 'quality:edit', 'alerts:view', 'alerts:manage', 'export:aggregate',
+    'micro:view', 'atm:view', 'cme:view', 'quality:view', 'quality:edit', 'quality:configure', 'alerts:view', 'alerts:manage', 'export:aggregate',
   ],
   infectologista: [
     ...VIEW_CORE, 'reports:view', 'config:view', 'config:references:validate',

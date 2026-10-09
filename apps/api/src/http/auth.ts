@@ -25,6 +25,8 @@ export interface AuthContext {
   scope: SectorScope;
   expiresAt: Date;
   idleExpiresAt: Date;
+  /** Temporary or expired password: only the password change is allowed until it is replaced. */
+  mustChangePassword: boolean;
 }
 
 declare module 'fastify' {
@@ -53,7 +55,7 @@ export function sessionLoader(db: Kysely<DB>, env: Env) {
     const row = await db
       .selectFrom('session')
       .innerJoin('app_user', 'app_user.id', 'session.user_id')
-      .select(['session.id as sessionId', 'session.csrf_hash', 'session.last_seen_at', 'session.expires_at', 'app_user.id as userId', 'app_user.login', 'app_user.display_name', 'app_user.institution_id', 'app_user.active', 'app_user.scope_all'])
+      .select(['session.id as sessionId', 'session.csrf_hash', 'session.last_seen_at', 'session.expires_at', 'app_user.id as userId', 'app_user.login', 'app_user.display_name', 'app_user.institution_id', 'app_user.active', 'app_user.scope_all', 'app_user.must_change_password', 'app_user.password_changed_at'])
       .where('session.token_hash', '=', sha256(token))
       .where('session.revoked_at', 'is', null)
       .executeTakeFirst();
@@ -90,12 +92,14 @@ export function sessionLoader(db: Kysely<DB>, env: Env) {
       scope: row.scope_all ? undefined : scopes.map((s) => s.sector_id),
       expiresAt: row.expires_at,
       idleExpiresAt: new Date(lastSeen.getTime() + idleMs),
+      mustChangePassword: row.must_change_password || (env.PASSWORD_MAX_AGE_DAYS > 0 && now - row.password_changed_at.getTime() > env.PASSWORD_MAX_AGE_DAYS * 86_400_000),
     };
   };
 }
 
 export function requireAuth(req: FastifyRequest): AuthContext {
   if (!req.auth) throw unauthorized();
+  if (req.auth.mustChangePassword) throw new HttpError(403, 'troca_de_senha', 'Troque sua senha para continuar.');
   return req.auth;
 }
 

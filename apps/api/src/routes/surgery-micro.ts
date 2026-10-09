@@ -3,14 +3,15 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import {
   dateInZone, evaluateProphylaxis, rulesFromParameters, surgicalRiskIndex, surveillanceEnd, zonedInstant, addDays,
-  type CultureDetail, type Paged, type SurgeryDetail, type SurgerySummary, type CultureSummary,
+  todayIn,
+  type CultureDetail, type Paged, type SurgeryDetail, type SurgerySummary, type CultureSummary, type SurveillanceRow,
 } from '@ccih/domain';
 import type { DB } from '../db/types';
 import { audit } from '../audit/audit';
 import { actorOf, requireAuth, requirePermission, type AuthContext } from '../http/auth';
 import { HttpError, conflict, notFound, parse } from '../http/errors';
 import { Instant, IsoDate, Justification, OptionalText, PageQuery, RowVersion, Text, Uuid, notFuture } from '../http/schemas';
-import { assertSector, caseSummaries, cultureSummaries, findAdmission, surgerySummaries } from '../repositories/clinical';
+import { admissionsInScope, assertSector, caseSummaries, cultureSummaries, findAdmission, scopeIds, surgerySummaries } from '../repositories/clinical';
 
 const WOUND = z.enum(['limpa', 'potencialmente_contaminada', 'contaminada', 'infectada']);
 const SurgeryFields = {
@@ -45,6 +46,10 @@ const CultureQuery = z
     outcome: z.enum(['pendente', 'negativa', 'positiva', 'contaminada']).optional(), resistant: z.enum(['true']).optional(), organism: z.string().trim().max(80).optional(),
     q: z.string().trim().max(40).optional(), ...PageQuery,
   })
+  .strict();
+
+const FollowupCreate = z
+  .object({ contactedOn: IsoDate, method: z.enum(['telefone', 'ambulatorio', 'retorno', 'mensagem', 'outro']), outcome: z.enum(['sem_sinais', 'suspeita', 'nao_localizado']), notes: OptionalText(1000), openCase: z.boolean() })
   .strict();
 
 const fieldError = (path: string, message: string) => new HttpError(400, 'validacao', message, [{ path, message }]);
@@ -102,7 +107,72 @@ export async function surgeryMicroRoutes(app: FastifyInstance, { db }: { db: Kys
       ),
       surveillance: surveillanceEnd(dateInZone(new Date(s.startedAt), tz), s.implant, { days: rules.surgery.surveillanceDays?.value, daysWithImplant: rules.surgery.surveillanceDaysWithImplant?.value }),
       cases: cases?.rows ?? [],
+      dischargedAt: (await db.selectFrom('admission').select('discharged_at').where('id', '=', s.admissionId).executeTakeFirstOrThrow()).discharged_at?.toISOString() ?? null,
+      followups: (await db.selectFrom('ssi_followup').selectAll().where('surgery_id', '=', id).orderBy('contacted_on', 'desc').execute()).map((f) => ({ id: f.id, contactedOn: f.contacted_on, method: f.method, outcome: f.outcome, notes: f.notes, caseId: f.case_id, by: f.recorded_by_name })),
     };
+  });
+
+  /** Open post-operative surveillance windows (SSI), with contact status. */
+  app.get('/surgeries/surveillance', { preHandler: requirePermission(db, 'surgery:view') }, async (req): Promise<{ rows: SurveillanceRow[]; ruleMissing: boolean }> => {
+    const auth = requireAuth(req);
+    const { pending } = parse(z.object({ pending: z.enum(['1']).optional() }).strict(), req.query);
+    const tz = await tzOf(auth.institutionId);
+    const today = todayIn(tz);
+    const params = await db.selectFrom('rule_parameter').select(['key', 'value', 'reference_id']).where('institution_id', '=', auth.institutionId).execute();
+    const rules = rulesFromParameters(params.map((p) => ({ key: p.key, value: p.value, referenceId: p.reference_id })));
+    const rule = { days: rules.surgery.surveillanceDays?.value, daysWithImplant: rules.surgery.surveillanceDaysWithImplant?.value };
+    if (rule.days == null && rule.daysWithImplant == null) return { rows: [], ruleMissing: true };
+    const maxDays = Math.max(rule.days ?? 0, rule.daysWithImplant ?? 0);
+    let q = db.selectFrom('surgery as s').innerJoin('admission as a', 'a.id', 's.admission_id').innerJoin('patient as p', 'p.id', 'a.patient_id').innerJoin('procedure_catalog as pc', 'pc.id', 's.procedure_id')
+      .select(['s.id', 's.started_at', 's.implant', 'a.discharged_at', 'pc.name', 'p.id as patient_id', 'p.initials', 'p.record_number'])
+      .where('s.institution_id', '=', auth.institutionId).where('s.started_at', '>=', zonedInstant(addDays(today, -maxDays), 0, tz));
+    if (auth.scope) {
+      const scope = scopeIds(auth.scope);
+      q = q.where((eb) => eb.or([eb('s.sector_id', 'in', scope), eb('s.admission_id', 'in', admissionsInScope(db, scope))]));
+    }
+    const rows = await q.orderBy('s.started_at').execute();
+    const follow = rows.length ? await db.selectFrom('ssi_followup').select(['surgery_id', 'contacted_on', 'outcome']).where('surgery_id', 'in', rows.map((r) => r.id)).execute() : [];
+    const out = rows.flatMap((s): SurveillanceRow[] => {
+      const end = surveillanceEnd(dateInZone(s.started_at, tz), s.implant, rule);
+      if (!end || end.end < today) return [];
+      const mine = follow.filter((f) => f.surgery_id === s.id).sort((a, b) => b.contacted_on.localeCompare(a.contacted_on));
+      return [{ surgeryId: s.id, patient: { id: s.patient_id, recordNumber: s.record_number, initials: s.initials }, procedure: s.name, surgeryDate: s.started_at.toISOString(), dischargedAt: s.discharged_at?.toISOString() ?? null, windowEnd: end.end, implant: s.implant, lastContact: mine[0]?.contacted_on ?? null, contacts: mine.length, suspicion: mine.some((f) => f.outcome === 'suspeita') }];
+    });
+    return { rows: pending ? out.filter((r) => r.dischargedAt && !r.contacts) : out, ruleMissing: false };
+  });
+
+  /** Post-discharge contact; a suspicion can open an SSI case (IRAS workflow) linked to the surgery. */
+  app.post<{ Params: { id: string } }>('/surgeries/:id/followups', { preHandler: requirePermission(db, 'surgery:edit') }, async (req, reply) => {
+    const auth = requireAuth(req);
+    const id = parse(Uuid, req.params.id);
+    const b = parse(FollowupCreate, req.body);
+    const found = (await surgerySummaries(db, { institutionId: auth.institutionId, scope: auth.scope, ids: [id] })).rows[0];
+    if (!found) throw notFound('Cirurgia');
+    const tz = await tzOf(auth.institutionId);
+    if (b.contactedOn > todayIn(tz)) throw fieldError('contactedOn', 'O contato não pode estar no futuro.');
+    if (b.contactedOn < dateInZone(new Date(found.summary.startedAt), tz)) throw fieldError('contactedOn', 'O contato deve ser posterior à cirurgia.');
+    if (b.openCase && b.outcome !== 'suspeita') throw fieldError('openCase', 'Só é possível abrir caso quando há suspeita de ISC.');
+    if (b.openCase && !auth.permissions.includes('iras:edit')) throw new HttpError(403, 'sem_permissao', 'Seu perfil não pode registrar suspeitas de IRAS.');
+    const row = await db.transaction().execute(async (trx) => {
+      let caseId: string | null = null;
+      if (b.openCase) {
+        const lastSector = await trx.selectFrom('admission_movement').select('sector_id').where('admission_id', '=', found.summary.admissionId).orderBy('start_at', 'desc').executeTakeFirstOrThrow();
+        const adm = await trx.selectFrom('admission').select('data_origin').where('id', '=', found.summary.admissionId).executeTakeFirstOrThrow();
+        const created = await trx.insertInto('iras_case').values({
+          institution_id: auth.institutionId, admission_id: found.summary.admissionId, iras_type: 'ISC', status: 'suspeita', event_date: b.contactedOn, sector_id: lastSector.sector_id,
+          device_associated: null, device_use_id: null, surgery_id: id, criterion_reference_id: null, criterion_snapshot: null, description: `Suspeita identificada na vigilância pós-alta. ${b.notes ?? ''}`.trim(),
+          data_origin: adm.data_origin, created_by: auth.userId, updated_at: new Date(),
+        }).returningAll().executeTakeFirstOrThrow();
+        await trx.insertInto('iras_case_status').values({ case_id: created.id, from_status: null, to_status: 'suspeita', justification: 'Suspeita de ISC na vigilância pós-alta.', decided_by: auth.userId, decided_by_name: auth.displayName, at: new Date() }).execute();
+        await audit(trx, actorOf(req), { action: 'create', entity: 'iras_case', entityId: created.id, after: created, context: { origin: 'vigilancia_pos_alta' } });
+        caseId = created.id;
+      }
+      const f = await trx.insertInto('ssi_followup').values({ surgery_id: id, contacted_on: b.contactedOn, method: b.method, outcome: b.outcome, notes: b.notes, case_id: caseId, recorded_by: auth.userId, recorded_by_name: auth.displayName }).returningAll().executeTakeFirstOrThrow();
+      await audit(trx, actorOf(req), { action: 'create', entity: 'ssi_followup', entityId: f.id, after: f });
+      return f;
+    });
+    reply.code(201);
+    return { id: row.id, caseId: row.case_id };
   });
 
   const surgeryValues = (b: z.infer<typeof SurgeryCreate> | z.infer<typeof SurgeryUpdate>) => ({

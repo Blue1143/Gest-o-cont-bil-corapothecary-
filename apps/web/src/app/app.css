@@ -102,3 +102,20 @@ a { color: var(--primary); }
 .isolate-box { border: 1px solid var(--line); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); margin: 0; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .isolate-box legend { font-weight: 600; font-size: 14px; padding: 0 var(--space-1); }
 .status-tiles { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+/* Phase 4 */
+.user-chip { color: var(--ink); text-decoration: none; border-radius: var(--radius-md); padding: 2px var(--space-2); }
+.user-chip:hover { background: var(--surface-sunken); }
+.nav-count { font-size: 11px; line-height: 18px; min-width: 20px; text-align: center; padding: 0 6px; border-radius: var(--radius-pill); background: var(--crit); color: var(--on-primary); font-weight: 600; }
+.alert-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.alert-item { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); flex-wrap: wrap; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); }
+.alert-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 320px; }
+.alert-title { margin: 0; font-weight: 600; font-size: 15px; line-height: 22px; }
+.answer-row { display: flex; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; align-items: center; padding: var(--space-2) 0; border-bottom: 1px solid var(--line); }
+.answer-row:last-child { border-bottom: 0; }
+.answer-row fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.answer-row label { display: inline-flex; gap: 4px; align-items: center; font-size: 14px; }
+.bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--primary); vertical-align: middle; }
+.bar-track { display: inline-block; width: 100px; height: 8px; border-radius: 4px; background: var(--surface-sunken); vertical-align: middle; overflow: hidden; margin-right: 8px; }
+.check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px var(--space-4); max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); }
+.check-grid label { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }

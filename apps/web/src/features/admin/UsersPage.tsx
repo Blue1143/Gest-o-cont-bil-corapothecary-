@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ROLE_LABEL, formatDate, type RoleCode } from '@ccih/domain';
-import { Button, Card, ConfirmDialog, DataTable, EmptyState, ErrorState, FormMessage, LoadingState, StatusBadge, type Column } from '@ccih/ui';
+import { AlertBanner, Button, Card, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormMessage, LoadingState, StatusBadge, type Column } from '@ccih/ui';
 import { useInstitution } from '../../data/source';
 import type { AdminUser } from '../../data/port';
 import { useSession } from '../auth/session';
@@ -29,6 +29,12 @@ export function UsersPage() {
   const canManage = session.writable && session.can('users:manage');
   const save = useAdminMutation((d: { id: string; draft: Draft; rowVersion: number }) => admin!.patchUser(d.id, { ...d.draft, rowVersion: d.rowVersion }), ['users']);
   const unlock = useAdminMutation((id: string) => admin!.unlockUser(id), ['users']);
+  const [creating, setCreating] = useState(false);
+  const [temporary, setTemporary] = useState<{ login: string; password: string } | null>(null);
+  const [resetting, setResetting] = useState<AdminUser | null>(null);
+  const [resetReason, setResetReason] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const reset = useAdminMutation((d: { id: string; justification: string }) => admin!.resetPassword(d.id, d.justification), ['users']);
 
   if (!admin) {
     return (
@@ -72,6 +78,7 @@ export function UsersPage() {
       <span className="ig-row" style={{ gap: 6 }}>
         <Button size="sm" onClick={() => open(u)} aria-label={`Editar acesso de ${u.login}`}>Editar acesso</Button>
         {u.lockedUntil ? <Button size="sm" onClick={() => { setEditing(u); setConfirm('unlock'); }} aria-label={`Desbloquear ${u.login}`}>Desbloquear</Button> : null}
+        {u.id !== session.info?.user.id ? <Button size="sm" variant="ghost" onClick={() => { setResetting(u); setResetReason(''); setResetError(null); }} aria-label={`Redefinir senha de ${u.login}`}>Redefinir senha</Button> : null}
       </span>
     ) } as Column<AdminUser>] : []),
   ];
@@ -80,6 +87,13 @@ export function UsersPage() {
     <div className="ig-stack" style={{ gap: 16 }}>
       <EditAvailability permissionLabel="Gerenciar usuários, perfis e escopos" allowed={session.can('users:manage')} />
       {saved ? <FormMessage tone="success">{saved}</FormMessage> : null}
+      {temporary ? (
+        <AlertBanner tone="warn" title={`Senha temporária de ${temporary.login}: ${temporary.password}`} actions={<Button size="sm" onClick={() => setTemporary(null)}>Já entreguei a senha</Button>}>
+          Entregue ao usuário por canal seguro. Ela não será exibida novamente, não fica no log e precisa ser trocada no primeiro acesso.
+        </AlertBanner>
+      ) : null}
+      {canManage && !creating && !editing ? <div><Button icon="plus" onClick={() => { setCreating(true); setSaved(null); }}>Novo usuário</Button></div> : null}
+      {creating ? <NewUserForm sectors={sectors} roles={roles.data?.roles ?? []} onDone={(r) => { setCreating(false); if (r) { setTemporary(r); setSaved(`Usuário ${r.login} criado.`); } }} /> : null}
       {editing && draft && confirm !== 'unlock' ? (
         <Card title={`Acesso de ${editing.login}`} subtitle="Alterar perfis ou escopo encerra as sessões abertas do usuário. O acesso a dados é sempre conferido no servidor.">
           <form className="ig-form" onSubmit={submit} noValidate>
@@ -145,6 +159,72 @@ export function UsersPage() {
       >
         Confirme que a identidade do usuário foi verificada. O desbloqueio fica registrado no log de auditoria.
       </ConfirmDialog>
+      <ConfirmDialog open={!!resetting} title={`Redefinir a senha de ${resetting?.login ?? ''}?`} confirmLabel="Gerar senha temporária" tone="danger" busy={reset.mutation.isPending}
+        onCancel={() => setResetting(null)}
+        onConfirm={() => {
+          const e = justificationError(resetReason);
+          if (e) { setResetError(e); return; }
+          const u = resetting!;
+          reset.mutation.mutate({ id: u.id, justification: resetReason.trim() }, { onSuccess: (r) => { setTemporary({ login: u.login, password: r.temporaryPassword }); setResetting(null); } });
+        }}>
+        <p style={{ marginTop: 0 }}>As sessões do usuário serão encerradas e ele deverá trocar a senha no próximo acesso. Confirme a identidade antes.</p>
+        <Field label="Justificativa" required error={resetError ?? reset.formError}><textarea value={resetReason} onChange={(e) => setResetReason(e.target.value)} maxLength={500} /></Field>
+      </ConfirmDialog>
     </div>
+  );
+}
+
+function NewUserForm({ sectors, roles, onDone }: { sectors: Array<{ id: string; name: string }>; roles: Array<{ code: string; name: string }>; onDone: (r?: { login: string; password: string }) => void }) {
+  const admin = useAdmin()!;
+  const [d, setD] = useState({ login: '', displayName: '', roles: [] as string[], scopeAll: false, sectorIds: [] as string[], justification: '' });
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const create = useAdminMutation((input: typeof d) => admin.createUser(input), ['users']);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const errs = {
+      login: /^[a-z0-9._-]{3,60}$/.test(d.login.trim().toLowerCase()) ? undefined : 'Use 3 a 60 letras minúsculas, números, ponto, hífen ou sublinhado.',
+      displayName: d.displayName.trim().length >= 3 ? undefined : 'Informe o nome de exibição.',
+      roles: d.roles.length ? undefined : 'Selecione ao menos um perfil.',
+      sectorIds: d.scopeAll || d.sectorIds.length ? undefined : 'Selecione ao menos um setor ou o acesso a todos.',
+      justification: justificationError(d.justification),
+    };
+    setErrors(errs);
+    if (Object.values(errs).some(Boolean)) return;
+    const input = { ...d, login: d.login.trim().toLowerCase(), displayName: d.displayName.trim(), justification: d.justification.trim() };
+    create.mutation.mutate(input, { onSuccess: (r) => onDone({ login: input.login, password: r.temporaryPassword }) });
+  };
+  const err = (k: string) => errors[k] ?? create.fieldErrors[k] ?? null;
+  return (
+    <Card title="Novo usuário" subtitle="O sistema gera uma senha temporária, exibida uma única vez; o usuário a troca no primeiro acesso.">
+      <form className="ig-form" onSubmit={submit} noValidate>
+        {create.formError ? <FormMessage tone="error">{create.formError}</FormMessage> : null}
+        <div className="ig-form-row">
+          <Field label="Login" required error={err('login')}><input value={d.login} onChange={(e) => setD({ ...d, login: e.target.value })} autoComplete="off" /></Field>
+          <Field label="Nome de exibição" required error={err('displayName')}><input value={d.displayName} onChange={(e) => setD({ ...d, displayName: e.target.value })} /></Field>
+        </div>
+        <fieldset className="ig-checks">
+          <legend>Perfis *</legend>
+          {roles.map((r) => <label key={r.code}><input type="checkbox" checked={d.roles.includes(r.code)} onChange={(e) => setD({ ...d, roles: e.target.checked ? [...d.roles, r.code] : d.roles.filter((x) => x !== r.code) })} />{r.name}</label>)}
+        </fieldset>
+        {err('roles') ? <p className="ig-field-error" role="alert">{err('roles')}</p> : null}
+        <fieldset className="ig-checks">
+          <legend>Escopo de dados *</legend>
+          <label><input type="radio" name="new-scope" checked={d.scopeAll} onChange={() => setD({ ...d, scopeAll: true })} />Todos os setores</label>
+          <label><input type="radio" name="new-scope" checked={!d.scopeAll} onChange={() => setD({ ...d, scopeAll: false })} />Setores selecionados</label>
+        </fieldset>
+        {!d.scopeAll ? (
+          <fieldset className="ig-checks">
+            <legend>Setores</legend>
+            {sectors.map((s) => <label key={s.id}><input type="checkbox" checked={d.sectorIds.includes(s.id)} onChange={(e) => setD({ ...d, sectorIds: e.target.checked ? [...d.sectorIds, s.id] : d.sectorIds.filter((x) => x !== s.id) })} />{s.name}</label>)}
+          </fieldset>
+        ) : null}
+        {err('sectorIds') ? <p className="ig-field-error" role="alert">{err('sectorIds')}</p> : null}
+        <JustificationField value={d.justification} onChange={(v) => setD({ ...d, justification: v })} error={err('justification') ?? undefined} />
+        <div className="ig-form-actions">
+          <Button type="submit" variant="primary" disabled={create.mutation.isPending}>Criar usuário</Button>
+          <Button onClick={() => onDone()}>Cancelar</Button>
+        </div>
+      </form>
+    </Card>
   );
 }

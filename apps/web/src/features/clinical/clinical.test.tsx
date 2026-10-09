@@ -44,6 +44,7 @@ function fakeSource(role: RoleCode) {
     me: async () => ({ user: { id: 'u1', login: role, displayName: `Usuário ${role}` }, roles: [role], permissions: DEFAULT_ROLE_PERMISSIONS[role], scope: null, session: { expiresAt: '2026-10-09T23:00:00Z', idleExpiresAt: '2026-10-09T13:00:00Z', idleMinutes: 30 } }),
     login: async () => undefined,
     logout: async () => undefined,
+    changePassword: async () => undefined,
   };
   const clinical = {
     org: vi.fn(async () => ORG),

@@ -21,6 +21,8 @@ export const DEMO_REFERENCES: ClinicalReference[] = [
     'Cobertura mínima de estoque e antecedência de alerta de validade.'),
   pending('ref-protocolo-censo', 'Procedimento institucional de censo diário', 'protocolo_institucional', 'Procedimento da instituição (modelo de demonstração)',
     'Horário do censo usado para paciente-dia e dispositivo-dia (denominadores dos indicadores).'),
+  pending('ref-procedimento-alertas', 'Procedimento institucional da central de alertas da CCIH', 'protocolo_institucional', 'Procedimento da instituição (modelo de demonstração)',
+    'Prazos que geram alertas e tempo de supressão após o encerramento (controle de excesso de alertas).'),
   pending('ref-protocolo-stewardship', 'Programa de gerenciamento do uso de antimicrobianos', 'protocolo_institucional', 'Programa da instituição (modelo de demonstração)',
     'Gatilhos de revisão de prescrição.'),
 ];
@@ -67,6 +69,11 @@ export const DEMO_CONFIG: InstitutionalConfig = {
     supplies: { expiryWarningDays: param(30, 'ref-protocolo-insumos'), defaultMinCoverageDays: param(15, 'ref-protocolo-insumos') },
     training: { expiryWarningDays: param(30, 'ref-protocolo-insumos') },
     antimicrobials: { prolongedTherapyDays: param(7, 'ref-protocolo-stewardship') },
+    alerts: {
+      investigationOverdueDays: param(7, 'ref-procedimento-alertas'),
+      deviceReviewDays: param(10, 'ref-procedimento-alertas'),
+      suppressHours: param(24, 'ref-procedimento-alertas'),
+    },
   },
 };
 

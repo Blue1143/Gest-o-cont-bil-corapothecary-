@@ -1,6 +1,6 @@
 import type { Kysely, Transaction } from 'kysely';
 import {
-  addDays, addMonths, consolidateClinicalFacts, dateInZone, rulesFromParameters, zonedInstant,
+  addDays, addMonths, consolidateClinicalFacts, consolidateOperationalFacts, dateInZone, rulesFromParameters, zonedInstant, OPERATIONAL_METRICS,
   type CensusAdmission, type ConsolidationCase, type InvestigationStatus, type MetricKey,
 } from '@ccih/domain';
 import type { DB } from '../db/types';
@@ -107,12 +107,46 @@ export async function consolidateMonths(db: Db, institutionId: string, months: s
     mdrIsolates: mdr.map((m) => ({ admissionId: m.admission_id, organism: m.organism, collectedOn: dateInZone(m.collected_at, tz), sectorId: m.sector_id })),
   });
 
-  const values = result.rows.flatMap((row) =>
+  const operational = await loadOperationalFacts(db, institutionId, sorted, from, to, tz, rules.training.expiryWarningDays?.value);
+  const metrics = [...result.metrics, ...OPERATIONAL_METRICS];
+  const values = [...result.rows, ...operational].flatMap((row) =>
     Object.entries(row.counts)
-      .filter(([metric]) => result.metrics.includes(metric as MetricKey))
+      .filter(([metric]) => metrics.includes(metric as MetricKey))
       .map(([metric, value]) => ({ institution_id: institutionId, period: row.period, sector_id: row.sectorId, metric, value: value!, data_origin: inst.data_origin, consolidated_at: now })),
   );
-  await db.deleteFrom('indicator_fact').where('institution_id', '=', institutionId).where('period', 'in', sorted).where('metric', 'in', result.metrics).execute();
+  await db.deleteFrom('indicator_fact').where('institution_id', '=', institutionId).where('period', 'in', sorted).where('metric', 'in', metrics).execute();
   for (let i = 0; i < values.length; i += 1000) await db.insertInto('indicator_fact').values(values.slice(i, i + 1000)).execute();
-  return { months: sorted, rows: values.length, metrics: result.metrics, skipped: result.skipped, origin: inst.data_origin };
+  return { months: sorted, rows: values.length, metrics, skipped: result.skipped, origin: inst.data_origin };
+}
+
+/** Bundles, hand hygiene, alcohol consumption and training coverage (voided records excluded). */
+async function loadOperationalFacts(db: Db, institutionId: string, months: string[], from: Date, to: Date, tz: string, warningDays: number | undefined) {
+  const [audits, hh, alcohol, professionals, trainings, attendance] = await Promise.all([
+    db.selectFrom('bundle_audit').innerJoin('bundle_template as t', 't.id', 'bundle_audit.template_id')
+      .select(['bundle_audit.audited_at', 'bundle_audit.sector_id', 'bundle_audit.result', 't.metric'])
+      .where('bundle_audit.institution_id', '=', institutionId).where('bundle_audit.voided_at', 'is', null)
+      .where('bundle_audit.audited_at', '>=', from).where('bundle_audit.audited_at', '<', to).execute(),
+    db.selectFrom('hand_hygiene_observation').select(['observed_at', 'sector_id', 'opportunities', 'actions'])
+      .where('institution_id', '=', institutionId).where('voided_at', 'is', null).where('observed_at', '>=', from).where('observed_at', '<', to).execute(),
+    db.selectFrom('supply_movement as m').innerJoin('supply_lot as l', 'l.id', 'm.lot_id').innerJoin('supply as s', 's.id', 'l.supply_id')
+      .select(['m.occurred_at', 'm.sector_id', 'm.delta'])
+      .where('s.institution_id', '=', institutionId).where('s.category', '=', 'preparacao_alcoolica').where('s.unit', '=', 'mL').where('m.kind', '=', 'consumo')
+      .where('m.occurred_at', '>=', from).where('m.occurred_at', '<', to).execute(),
+    db.selectFrom('professional').select(['id', 'sector_id', 'job_role_id', 'active']).where('institution_id', '=', institutionId).execute(),
+    db.selectFrom('training').select(['id', 'mandatory', 'validity_months', 'target_job_role_ids']).where('institution_id', '=', institutionId).where('active', '=', true).execute(),
+    db.selectFrom('training_attendance as a').innerJoin('training_session as s', 's.id', 'a.session_id').innerJoin('training as t', 't.id', 's.training_id')
+      .select(['s.training_id', 'a.professional_id', 's.held_on', 'a.present']).where('t.institution_id', '=', institutionId).execute(),
+  ]);
+  return consolidateOperationalFacts({
+    months,
+    bundleAudits: audits.map((a) => ({ date: dateInZone(a.audited_at, tz), sectorId: a.sector_id, metric: a.metric, compliant: a.result === 'conforme' })),
+    handHygiene: hh.map((h) => ({ date: dateInZone(h.observed_at, tz), sectorId: h.sector_id, opportunities: h.opportunities, actions: h.actions })),
+    alcohol: alcohol.filter((a) => a.sector_id).map((a) => ({ date: dateInZone(a.occurred_at, tz), sectorId: a.sector_id!, ml: -Number(a.delta) })),
+    training: trainings.length ? {
+      professionals: professionals.map((p) => ({ id: p.id, sectorId: p.sector_id, jobRoleId: p.job_role_id, active: p.active })),
+      trainings: trainings.map((t) => ({ id: t.id, mandatory: t.mandatory, validityMonths: t.validity_months, targetJobRoleIds: t.target_job_role_ids })),
+      attendances: attendance.map((a) => ({ trainingId: a.training_id, professionalId: a.professional_id, heldOn: a.held_on, present: a.present })),
+      warningDays,
+    } : null,
+  });
 }

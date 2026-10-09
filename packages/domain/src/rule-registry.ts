@@ -35,10 +35,13 @@ export const RULE_PARAMETERS: RuleParameterSpec[] = [
   spec('supplies', 'defaultMinCoverageDays', 'Cobertura mínima padrão de estoque', 'dias', 1, 365),
   spec('training', 'expiryWarningDays', 'Alerta de vencimento de treinamento', 'dias', 1, 365),
   spec('antimicrobials', 'prolongedTherapyDays', 'Terapia antimicrobiana prolongada a partir de', 'dias', 1, 90),
+  spec('alerts', 'investigationOverdueDays', 'Alerta de investigação de IRAS sem conclusão após', 'dias', 1, 60),
+  spec('alerts', 'deviceReviewDays', 'Alerta de revisão de dispositivo em uso após', 'dias', 1, 60),
+  spec('alerts', 'suppressHours', 'Não reabrir alerta encerrado antes de', 'h', 1, 720),
 ];
 
 export const RULE_GROUP_LABEL: Record<keyof InstitutionalRules, string> = {
-  devices: 'Dispositivos', admissions: 'Internação', surgery: 'Cirurgia', supplies: 'Insumos', training: 'Treinamentos', antimicrobials: 'Antimicrobianos',
+  devices: 'Dispositivos', admissions: 'Internação', surgery: 'Cirurgia', supplies: 'Insumos', training: 'Treinamentos', antimicrobials: 'Antimicrobianos', alerts: 'Alertas',
 };
 
 const BY_KEY = new Map(RULE_PARAMETERS.map((s) => [s.key, s]));

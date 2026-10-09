@@ -62,6 +62,14 @@ export interface InstitutionalRules {
     /** Days of therapy after which a prescription is flagged for review. */
     prolongedTherapyDays?: RuleParameter<number>;
   };
+  alerts: {
+    /** Open IRAS investigation older than this raises an alert. */
+    investigationOverdueDays?: RuleParameter<number>;
+    /** Device in place beyond this day raises a review alert. */
+    deviceReviewDays?: RuleParameter<number>;
+    /** After an alert is closed, the same condition does not reopen it for this long. */
+    suppressHours?: RuleParameter<number>;
+  };
 }
 
 export interface InstitutionalConfig {
@@ -79,6 +87,7 @@ export const emptyRules = (): InstitutionalRules => ({
   supplies: {},
   training: {},
   antimicrobials: {},
+  alerts: {},
 });
 
 export function findTarget(config: InstitutionalConfig, indicatorId: string): IndicatorTarget | undefined {

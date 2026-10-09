@@ -58,6 +58,7 @@ export interface ProfessionalTable {
   registration: string | null;
   job_role_id: string | null;
   active: Generated<boolean>;
+  sector_id: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface RoleTable {
@@ -80,6 +81,7 @@ export interface AppUserTable {
   locked_until: NullableTimestamp;
   last_login_at: NullableTimestamp;
   password_changed_at: Timestamp;
+  must_change_password: Generated<boolean>;
   created_at: CreatedAt;
   row_version: RowVersion;
 }
@@ -386,6 +388,67 @@ export interface CcihNoteTable {
   created_at: CreatedAt;
 }
 
+type Voidable = { voided_at: NullableTimestamp; voided_by_name: string | null; void_reason: string | null };
+
+export interface BundleTemplateTable {
+  id: Generated<string>; institution_id: string; code: string; name: string; metric: 'cvc' | 'vm' | 'svd' | null;
+  method: 'tudo_ou_nada' | 'por_item'; reference_id: string | null; active: Generated<boolean>; updated_at: Timestamp; row_version: RowVersion;
+}
+export interface BundleItemTable { id: Generated<string>; template_id: string; position: number; label: string; active: Generated<boolean> }
+export interface BundleAuditTable extends Voidable {
+  id: Generated<string>; institution_id: string; template_id: string; sector_id: string; admission_id: string | null; audited_at: Timestamp;
+  method: string; result: 'conforme' | 'nao_conforme'; notes: string | null; auditor_id: string | null; auditor_name: string; data_origin: Origin; created_at: CreatedAt;
+}
+export interface BundleAuditAnswerTable { audit_id: string; item_id: string; item_label: string; answer: 'conforme' | 'nao_conforme' | 'nao_aplicavel' }
+export interface HandHygieneObservationTable extends Voidable {
+  id: Generated<string>; institution_id: string; sector_id: string; observed_at: Timestamp; category: 'enfermagem' | 'medica' | 'fisioterapia' | 'apoio' | 'outros';
+  opportunities: number; actions: number; observer_id: string | null; observer_name: string; data_origin: Origin; created_at: CreatedAt;
+}
+export interface QualityAuditTable {
+  id: Generated<string>; institution_id: string; title: string; kind: 'processo' | 'estrutura' | 'documental' | 'outro'; sector_id: string | null; scope: string | null;
+  planned_for: string; status: 'planejada' | 'em_andamento' | 'concluida' | 'plano_de_acao' | 'verificacao_eficacia' | 'encerrada' | 'cancelada';
+  findings: string | null; data_origin: Origin; created_by: string | null; created_at: CreatedAt; updated_at: Timestamp; row_version: RowVersion;
+}
+export interface StatusHistoryRow { id: Generated<string>; from_status: string | null; to_status: string; justification: string; decided_by: string | null; decided_by_name: string; at: Timestamp }
+export interface QualityAuditStatusTable extends StatusHistoryRow { audit_id: string }
+export interface NonconformityTable {
+  id: Generated<string>; institution_id: string; audit_id: string | null; sector_id: string | null; origin: 'auditoria' | 'bundle' | 'higiene_maos' | 'cme' | 'notificacao' | 'outro';
+  severity: 'baixa' | 'media' | 'alta'; description: string; detected_on: string; status: 'aberta' | 'em_tratamento' | 'aguardando_eficacia' | 'encerrada' | 'cancelada';
+  effectiveness: string | null; data_origin: Origin; created_by: string | null; created_at: CreatedAt; updated_at: Timestamp; row_version: RowVersion;
+}
+export interface NonconformityStatusTable extends StatusHistoryRow { nonconformity_id: string }
+export interface ActionPlanTable {
+  id: Generated<string>; nonconformity_id: string; what: string; why: string; where_text: string; who_name: string; due_on: string; how: string; how_much: string | null;
+  status: 'pendente' | 'em_andamento' | 'concluida' | 'cancelada'; completed_on: string | null; created_at: CreatedAt; updated_at: Timestamp; row_version: RowVersion;
+}
+export interface AlertTable {
+  id: Generated<string>; institution_id: string; kind: string; dedup_key: string; priority: 'alta' | 'media' | 'baixa'; status: 'aberto' | 'assumido' | 'encerrado';
+  title: string; detail: string; entity: string; entity_id: string | null; sector_id: string | null; link: string | null; created_at: CreatedAt; last_seen_at: Timestamp;
+  assigned_to: string | null; assigned_name: string | null; assigned_at: NullableTimestamp; closed_at: NullableTimestamp; closed_by_name: string | null; resolution: string | null; row_version: RowVersion;
+}
+export interface TrainingTable {
+  id: Generated<string>; institution_id: string; title: string; theme: string; mandatory: boolean; validity_months: number | null; target_job_role_ids: string[];
+  description: string | null; active: Generated<boolean>; updated_at: Timestamp; row_version: RowVersion;
+}
+export interface TrainingSessionTable {
+  id: Generated<string>; training_id: string; held_on: string; instructor: string; hours: ColumnType<string, number, number>; sector_id: string | null; notes: string | null;
+  data_origin: Origin; created_by: string | null; created_at: CreatedAt;
+}
+export interface TrainingAttendanceTable { session_id: string; professional_id: string; present: boolean; score: ColumnType<string | null, number | null, number | null> }
+export interface SupplyTable {
+  id: Generated<string>; institution_id: string; code: string; name: string; category: 'preparacao_alcoolica' | 'sabonete' | 'epi' | 'antisseptico' | 'saneante' | 'outro';
+  unit: string; min_coverage_days: number | null; active: Generated<boolean>; updated_at: Timestamp; row_version: RowVersion;
+}
+export interface SupplyLotTable { id: Generated<string>; supply_id: string; lot: string; expires_on: string | null; created_at: CreatedAt }
+export interface SupplyMovementTable {
+  id: Generated<string>; lot_id: string; kind: 'entrada' | 'consumo' | 'ajuste' | 'descarte'; delta: ColumnType<string, number, number>; sector_id: string | null; occurred_at: Timestamp;
+  reason: string | null; created_by: string | null; created_by_name: string; data_origin: Origin; created_at: CreatedAt;
+}
+export interface SsiFollowupTable {
+  id: Generated<string>; surgery_id: string; contacted_on: string; method: 'telefone' | 'ambulatorio' | 'retorno' | 'mensagem' | 'outro';
+  outcome: 'sem_sinais' | 'suspeita' | 'nao_localizado'; notes: string | null; case_id: string | null; recorded_by: string | null; recorded_by_name: string; created_at: CreatedAt;
+}
+
 export interface DB {
   institution: InstitutionTable;
   unit: UnitTable;
@@ -418,4 +481,22 @@ export interface DB {
   iras_case_status: IrasCaseStatusTable;
   iras_case_culture: IrasCaseCultureTable;
   ccih_note: CcihNoteTable;
+  bundle_template: BundleTemplateTable;
+  bundle_item: BundleItemTable;
+  bundle_audit: BundleAuditTable;
+  bundle_audit_answer: BundleAuditAnswerTable;
+  hand_hygiene_observation: HandHygieneObservationTable;
+  quality_audit: QualityAuditTable;
+  quality_audit_status: QualityAuditStatusTable;
+  nonconformity: NonconformityTable;
+  nonconformity_status: NonconformityStatusTable;
+  action_plan: ActionPlanTable;
+  alert: AlertTable;
+  training: TrainingTable;
+  training_session: TrainingSessionTable;
+  training_attendance: TrainingAttendanceTable;
+  supply: SupplyTable;
+  supply_lot: SupplyLotTable;
+  supply_movement: SupplyMovementTable;
+  ssi_followup: SsiFollowupTable;
 }

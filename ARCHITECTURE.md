@@ -50,6 +50,14 @@ Fatos mensais por setor (`FactRow`: período, setor, contagens) → `computeIndi
 - **Datas**: o que o usuário digita em `datetime-local` é interpretado no fuso da instituição (`fromLocalInput`), não no do navegador; o servidor guarda instantes UTC.
 - **DTOs** compartilhados (`clinical/dto.ts`) definem o contrato entre API e web.
 
+## CCIH operacional (Fase 4)
+
+- **Porta `operations`** em `CcihDataSource`, também só com o backend.
+- **Domínio** (`packages/domain/src/operations`): transições de auditoria e não conformidade (`checkAuditTransition`, `checkNcTransition`), cobertura de treinamento (`requiredTrainings`, `coverageBySector`), estoque por lote e consumo (`stockByLot`, `dailyConsumption`, `evaluateStock`), avaliação de bundle (`evaluateBundle`) e candidatos de alerta (`buildAlertCandidates`) — funções puras, aplicadas pela API e mostradas pela interface.
+- **Alertas**: `services/alerts.ts` coleta os candidatos dos registros, faz upsert por `dedup_key` numa transação com *advisory lock*, respeita a supressão após o encerramento e encerra automaticamente o que deixou de valer. A geração roda sob demanda (lista, contador ou `POST /alerts/refresh`), limitada a uma vez por minuto por instituição; chamadas simultâneas aguardam a mesma execução.
+- **Consolidação**: `consolidateOperationalFacts` gera os fatos de bundles, higiene das mãos, preparação alcoólica e treinamentos; `POST /facts/consolidate` junta clínicos e operacionais.
+- **Senha obrigatória**: `requireAuth` bloqueia com 403 `troca_de_senha`; no cliente, `RequireSession` leva a `/conta` e o menu fica vazio até a troca.
+
 ## Sessão no cliente
 
 `SessionProvider` consulta `/auth/me` (que responde `{ authenticated: false }` para visitantes), expõe `can(...permissões)` e o motivo do fim da sessão (`saida`, `inatividade`, `expirada`). `RequireSession` e `Guard` fazem os redirecionamentos; o menu é filtrado por permissão. Ao sair ou expirar, o cache inteiro de consultas é descartado. `IdleWarning` avisa 2 minutos antes da expiração por inatividade e mantém a sessão viva enquanto há atividade real.

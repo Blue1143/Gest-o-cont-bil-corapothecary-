@@ -24,6 +24,7 @@ function fakeApi(role: RoleCode | null) {
     me: async () => (current ? info(current) : null),
     login: async (login, password) => { if (password !== 'Senha-Correta-1') throw new ApiError(401, 'credenciais', 'Usuário ou senha inválidos, ou conta temporariamente bloqueada.'); current = login as RoleCode; },
     logout: async () => { current = null; },
+    changePassword: async () => undefined,
   };
   const saveTarget = vi.fn(async () => undefined);
   const admin = {

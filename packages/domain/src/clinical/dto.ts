@@ -5,6 +5,7 @@ import type { WoundClass, ProphylaxisEvaluation, RiskIndexResult } from '../rule
 import type { CultureOutcome, Interpretation, ResistanceProfile } from './microbiology';
 import type { DischargeOutcome, NoteKind, Sex } from './patient';
 import type { IrasContext } from './iras-workflow';
+import type { FollowupDto } from '../operations/dto';
 
 /**
  * Payloads exchanged by the API and the web client for the clinical modules. Patients are always
@@ -64,6 +65,7 @@ export interface SurgerySummary {
 export interface SurgeryDetail extends SurgerySummary {
   notes: string | null; p75Minutes: number | null; p75Source: string | null; risk: RiskIndexResult; prophylaxis: ProphylaxisEvaluation;
   surveillance: { end: string; days: number } | null; cases: IrasCaseSummary[];
+  dischargedAt: string | null; followups: FollowupDto[];
 }
 
 export interface SusceptibilityDto { antimicrobial: string; mic: string | null; interpretation: Interpretation }

@@ -1,5 +1,5 @@
 import type { FactRow, InstitutionData, WithProvenance } from '@ccih/domain';
-import type { AdminPort, AuthPort, CcihDataSource, ClinicalPort, FactsQuery, OrgAdminPort, SessionInfo } from '../port';
+import type { AdminPort, AuthPort, CcihDataSource, ClinicalPort, FactsQuery, OperationsPort, OrgAdminPort, SessionInfo } from '../port';
 import { createHttpClient, type HttpClient } from './http';
 
 /** Backend source: every authorization decision is taken by the API; the UI only reflects it. */
@@ -9,6 +9,7 @@ export class ApiDataSource implements CcihDataSource {
   readonly admin: AdminPort;
   readonly clinical: ClinicalPort;
   readonly orgAdmin: OrgAdminPort;
+  readonly operations: OperationsPort;
   private readonly http: HttpClient;
 
   constructor(base = '/api', onUnauthorized: () => void = () => {}) {
@@ -21,6 +22,7 @@ export class ApiDataSource implements CcihDataSource {
       },
       login: async (login, password) => { await http.send('POST', '/auth/login', { login, password }); },
       logout: async () => { await http.send('POST', '/auth/logout'); },
+      changePassword: async (currentPassword, newPassword) => { await http.send('POST', '/auth/password', { currentPassword, newPassword }); },
     };
     const ok = async (p: Promise<unknown>) => { await p; };
     this.admin = {
@@ -39,6 +41,8 @@ export class ApiDataSource implements CcihDataSource {
       audit: (q) => http.get('/audit', q),
       verifyAudit: () => http.get('/audit/verify'),
       logExport: (event) => ok(http.send('POST', '/audit/events/export', event)),
+      createUser: (input) => http.send('POST', '/users', input),
+      resetPassword: (uid, justification) => http.send('POST', `/users/${encodeURIComponent(uid)}/reset-password`, { justification }),
     };
     const id = (v: string) => encodeURIComponent(v);
     this.clinical = {
@@ -81,6 +85,45 @@ export class ApiDataSource implements CcihDataSource {
       updateSector: (sid, input) => ok(http.send('PUT', `/org/sectors/${id(sid)}`, input)),
       addBeds: (sid, input) => ok(http.send('POST', `/org/sectors/${id(sid)}/beds`, input)),
       updateBed: (b, input) => ok(http.send('PUT', `/org/beds/${id(b)}`, input)),
+    };
+    this.operations = {
+      bundleTemplates: () => http.get('/bundles/templates'),
+      saveBundleTemplate: (input) => ok(http.send('PUT', '/bundles/templates', input)),
+      bundleAudits: (q) => http.get('/bundles/audits', q),
+      createBundleAudit: (input) => http.send('POST', '/bundles/audits', input),
+      voidBundleAudit: (a, reason) => ok(http.send('POST', `/bundles/audits/${id(a)}/void`, { reason })),
+      bundleSummary: (q) => http.get('/bundles/summary', q),
+      handHygiene: (q) => http.get('/hand-hygiene', q),
+      createHandHygiene: (input) => ok(http.send('POST', '/hand-hygiene', input)),
+      voidHandHygiene: (h, reason) => ok(http.send('POST', `/hand-hygiene/${id(h)}/void`, { reason })),
+      qualityAudits: () => http.get('/quality/audits'),
+      qualityAudit: (a) => http.get(`/quality/audits/${id(a)}`),
+      createQualityAudit: (input) => http.send('POST', '/quality/audits', input),
+      updateQualityAudit: (a, input) => ok(http.send('PUT', `/quality/audits/${id(a)}`, input)),
+      changeAuditStatus: (a, input) => ok(http.send('POST', `/quality/audits/${id(a)}/status`, input)),
+      nonconformities: (status) => http.get('/quality/nonconformities', { status }),
+      nonconformity: (n) => http.get(`/quality/nonconformities/${id(n)}`),
+      createNonconformity: (input) => http.send('POST', '/quality/nonconformities', input),
+      changeNcStatus: (n, input) => ok(http.send('POST', `/quality/nonconformities/${id(n)}/status`, input)),
+      addAction: (n, input) => ok(http.send('POST', `/quality/nonconformities/${id(n)}/actions`, input)),
+      changeActionStatus: (a, input) => ok(http.send('POST', `/quality/actions/${id(a)}/status`, input)),
+      alerts: (q) => http.get('/alerts', q),
+      alertSummary: () => http.get('/alerts/summary'),
+      refreshAlerts: () => http.send('POST', '/alerts/refresh'),
+      assumeAlert: (a, rowVersion) => ok(http.send('POST', `/alerts/${id(a)}/assume`, { rowVersion })),
+      closeAlert: (a, resolution, rowVersion) => ok(http.send('POST', `/alerts/${id(a)}/close`, { resolution, rowVersion })),
+      staff: () => http.get('/staff'),
+      createStaff: (input) => ok(http.send('POST', '/staff', input)),
+      trainings: () => http.get('/trainings'),
+      trainingCoverage: () => http.get('/trainings/coverage'),
+      saveTraining: (input) => ok(http.send('PUT', '/trainings', input)),
+      createSession: (t, input) => ok(http.send('POST', `/trainings/${id(t)}/sessions`, input)),
+      supplies: () => http.get('/supplies'),
+      supplyMovements: (s) => http.get(`/supplies/${id(s)}/movements`),
+      saveSupply: (input) => ok(http.send('PUT', '/supplies', input)),
+      addMovement: (s, input) => ok(http.send('POST', `/supplies/${id(s)}/movements`, input)),
+      surveillance: (pending) => http.get('/surgeries/surveillance', { pending: pending ? '1' : undefined }),
+      addFollowup: (s, input) => http.send('POST', `/surgeries/${id(s)}/followups`, input),
     };
   }
 

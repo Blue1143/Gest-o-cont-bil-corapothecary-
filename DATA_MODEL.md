@@ -1,6 +1,6 @@
 # Modelo de dados — CCIH Integra
 
-Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/api/src/db/migrations/0001_foundation.ts`): instituição, unidade, setor, leito, cargo/função, profissional, perfil, usuário, perfil do usuário, escopo do usuário, sessão, log de auditoria, referência clínica, parâmetro de regra, meta de indicador, política de liberação da CME e fatos mensais de indicadores. **Implementado na Fase 3** (migração `0002_clinical`): `patient`, `admission`, `admission_movement`, `device_use`, `procedure_catalog`, `surgery`, `culture`, `culture_result`, `isolate`, `susceptibility`, `iras_case`, `iras_case_status`, `iras_case_culture` e `ccih_note` (ver §2–§5; diferenças do modelo alvo na nota de cada seção). As demais seções são o modelo alvo das fases seguintes. Convenções:
+Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/api/src/db/migrations/0001_foundation.ts`): instituição, unidade, setor, leito, cargo/função, profissional, perfil, usuário, perfil do usuário, escopo do usuário, sessão, log de auditoria, referência clínica, parâmetro de regra, meta de indicador, política de liberação da CME e fatos mensais de indicadores. **Implementado na Fase 3** (migração `0002_clinical`): `patient`, `admission`, `admission_movement`, `device_use`, `procedure_catalog`, `surgery`, `culture`, `culture_result`, `isolate`, `susceptibility`, `iras_case`, `iras_case_status`, `iras_case_culture` e `ccih_note` (ver §2–§5; diferenças do modelo alvo na nota de cada seção). **Implementado na Fase 4** (migração `0003_operations`): bundles, higiene das mãos, auditorias de qualidade, não conformidades e planos de ação, alertas, treinamentos, insumos e `ssi_followup` (ver §4 e §7), além de `professional.sector_id` e `app_user.must_change_password`. As demais seções são o modelo alvo das fases seguintes. Convenções:
 
 - Chave primária `id` UUID aleatório (`gen_random_uuid()`, não sequencial → sem enumeração). Números humanos (prontuário, ciclo, lote) são colunas próprias com índice único por instituição.
 - Toda tabela de negócio tem `institution_id` (isolamento multi-instituição) e as editáveis têm `updated_at` e `row_version` (bloqueio otimista). Quem alterou e por quê fica no `audit_log`.
@@ -60,7 +60,7 @@ Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/
 | `surgery_material_use` | caixa/material, carga, horário | liga cirurgia ↔ CME |
 | `ssi_followup` | data, meio de contato, achado, encerramento | N—1 cirurgia |
 
-> **Fase 3:** a profilaxia fica em colunas de `surgery` (fármaco, horário da dose, duração, redose); `surgical_prophylaxis` (várias doses), `surgery_material_use` (Fase 5) e `ssi_followup` (Fase 4) ainda não existem. `procedure_catalog.p75_source` registra a origem do P75 (no seed: valor de demonstração a substituir).
+> **Fase 3:** a profilaxia fica em colunas de `surgery` (fármaco, horário da dose, duração, redose); `surgical_prophylaxis` (várias doses), e `surgery_material_use` (Fase 5) ainda não existem. **Fase 4:** `ssi_followup` (somente inserção) registra cada contato pós-alta (data, método, resultado: sem sinais / suspeita / não localizado) e pode apontar para o `iras_case` de ISC aberto a partir dele. `procedure_catalog.p75_source` registra a origem do P75 (no seed: valor de demonstração a substituir).
 
 ## 5. Microbiologia e antimicrobianos
 
@@ -101,6 +101,8 @@ Rastreabilidade: `patient → surgery → surgery_material_use → load_item →
 | `supply`, `supply_lot`, `supply_movement` | insumos (categoria, unidade, fornecedor, local), lotes e validades, consumo |
 | `outbreak`, `outbreak_case`, `outbreak_action` | investigação de surto |
 | `alert` | alerta (origem, prioridade, responsável, status, ação, deduplicação por chave e janela) |
+
+> **Fase 4 (implementado):** `bundle_template`/`bundle_item`/`bundle_audit`/`bundle_audit_answer` (a resposta guarda o texto do item na data, então editar o modelo não altera auditorias passadas; um modelo ativo por indicador; auditoria anulada com justificativa, nunca excluída); `hand_hygiene_observation` (oportunidades/ações); a auditoria do modelo alvo é `quality_audit` + `quality_audit_status`, e a não conformidade tem `nonconformity_status` — os dois históricos são somente inserção; `action_plan` guarda os campos 5W2H; `training` (público-alvo por função, validade, obrigatoriedade) com `training_session` e `training_attendance`; `supply`, `supply_lot` e `supply_movement` (livro-razão somente inserção com quantidade sinalizada; o estoque é a soma). `alert` tem índice único parcial por `dedup_key` entre os abertos e `link` para o registro de origem. `outbreak*` fica para a Fase 7.
 
 ## 8. Configuração e referências
 

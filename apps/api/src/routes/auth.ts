@@ -4,9 +4,11 @@ import { z } from 'zod';
 import type { DB } from '../db/types';
 import type { Env } from '../env';
 import { audit } from '../audit/audit';
-import { burnPasswordCheck, hashPassword, needsRehash, newToken, sha256, verifyPassword } from '../security/crypto';
+import { burnPasswordCheck, hashPassword, needsRehash, newToken, passwordProblem, sha256, verifyPassword } from '../security/crypto';
 import { CSRF_COOKIE, SESSION_COOKIE, actorOf, type AuthContext } from '../http/auth';
 import { HttpError, parse } from '../http/errors';
+
+const PasswordBody = z.object({ currentPassword: z.string().min(1).max(128), newPassword: z.string().min(1).max(128) }).strict();
 
 const LoginBody = z.object({ login: z.string().trim().toLowerCase().min(3).max(60), password: z.string().min(1).max(128) }).strict();
 
@@ -20,6 +22,7 @@ export function meResponse(auth: AuthContext, idleMinutes: number) {
     permissions: auth.permissions,
     scope: auth.scope ?? null,
     session: { expiresAt: auth.expiresAt.toISOString(), idleExpiresAt: auth.idleExpiresAt.toISOString(), idleMinutes },
+    mustChangePassword: auth.mustChangePassword,
   };
 }
 
@@ -87,6 +90,29 @@ export async function authRoutes(app: FastifyInstance, { db, env }: { db: Kysely
       await audit(db, actorOf(req), { action: 'logout', entity: 'session', entityId: req.auth.sessionId });
     }
     clearCookies(reply);
+    return { ok: true };
+  });
+
+  /** Own password change: current password required; other sessions end; the password is never logged. */
+  app.post('/auth/password', { config: { rateLimit: { max: env.LOGIN_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute' } } }, async (req) => {
+    if (!req.auth) throw new HttpError(401, 'nao_autenticado', 'Sessão inexistente ou expirada. Entre novamente.');
+    const auth = req.auth;
+    const b = parse(PasswordBody, req.body);
+    const user = await db.selectFrom('app_user').select(['password_hash', 'login']).where('id', '=', auth.userId).executeTakeFirstOrThrow();
+    if (!(await verifyPassword(user.password_hash, b.currentPassword))) {
+      await audit(db, actorOf(req), { action: 'login_failure', entity: 'app_user_password', entityId: auth.userId, context: { reason: 'senha_atual_incorreta' } });
+      throw new HttpError(400, 'validacao', 'Senha atual incorreta.', [{ path: 'currentPassword', message: 'Senha atual incorreta.' }]);
+    }
+    const problem = passwordProblem(b.newPassword)
+      ?? (b.newPassword === b.currentPassword ? 'A nova senha deve ser diferente da atual.' : null)
+      ?? (b.newPassword.toLowerCase().includes(user.login.toLowerCase()) ? 'A senha não pode conter o nome de usuário.' : null);
+    if (problem) throw new HttpError(400, 'validacao', problem, [{ path: 'newPassword', message: problem }]);
+    const hash = await hashPassword(b.newPassword);
+    await db.transaction().execute(async (trx) => {
+      await trx.updateTable('app_user').set({ password_hash: hash, password_changed_at: new Date(), must_change_password: false }).where('id', '=', auth.userId).execute();
+      await trx.updateTable('session').set({ revoked_at: new Date(), revoked_reason: 'senha_alterada' }).where('user_id', '=', auth.userId).where('revoked_at', 'is', null).where('id', '!=', auth.sessionId).execute();
+      await audit(trx, actorOf(req), { action: 'update', entity: 'app_user_password', entityId: auth.userId, context: { otherSessionsEnded: true } });
+    });
     return { ok: true };
   });
 

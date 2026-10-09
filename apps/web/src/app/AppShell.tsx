@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ROLE_LABEL, type RoleCode } from '@ccih/domain';
 import { EnvironmentBanner, Icon } from '@ccih/ui';
 import { useDataSource, useInstitution } from '../data/source';
 import { useSession } from '../features/auth/session';
 import { IdleWarning } from '../features/auth/IdleWarning';
+import { useAlertCount } from '../features/operations/AlertsPage';
 import { ErrorBoundary } from './ErrorBoundary';
 import { NAVIGATION } from './navigation';
 import { THEME_LABEL, useTheme } from './theme';
@@ -22,7 +23,9 @@ export function AppShell() {
   // The banner follows the data, not only the source: an API backed by a demo database is still demo.
   const demo = source.origin === 'demo' || institution.data?.provenance.origin === 'demo';
   const roles = (session.info?.roles ?? []).map((r) => ROLE_LABEL[r as RoleCode] ?? r).join(', ');
-  const groups = NAVIGATION.map((g) => ({ ...g, items: g.items.filter((i) => session.can(...i.permissions)) })).filter((g) => g.items.length);
+  const alertCount = useAlertCount();
+  const forced = !!session.info?.mustChangePassword;
+  const groups = (forced ? [] : NAVIGATION).map((g) => ({ ...g, items: g.items.filter((i) => session.can(...i.permissions)) })).filter((g) => g.items.length);
 
   return (
     <div className="app ig-root">
@@ -44,10 +47,10 @@ export function AppShell() {
           </button>
           {session.info ? (
             <>
-              <span className="user-chip hide-sm" title={roles}>
+              <Link to="/conta" className="user-chip hide-sm" title={`${roles} — Minha conta`}>
                 <b>{session.info.user.displayName}</b>
                 <span>{roles}</span>
-              </span>
+              </Link>
               <button type="button" className="ig-btn ig-btn-sm" onClick={() => void session.logout('saida')}>
                 Sair
               </button>
@@ -66,6 +69,7 @@ export function AppShell() {
                     <NavLink to={item.path} end={item.path === '/'} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
                       <span>{item.label}</span>
                       {item.phase ? <span className="nav-phase"><span className="ig-sr-only"> — em desenvolvimento, </span>Fase {item.phase}</span> : null}
+                      {item.path === '/alertas' && alertCount.data?.byPriority.alta ? <span className="nav-count" title="Alertas abertos de prioridade alta"><span className="ig-sr-only"> — </span>{alertCount.data.byPriority.alta}<span className="ig-sr-only"> de prioridade alta</span></span> : null}
                     </NavLink>
                   </li>
                 ))}

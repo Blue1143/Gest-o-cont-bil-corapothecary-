@@ -1,0 +1,100 @@
+import { describe, expect, it } from 'vitest';
+import { checkAuditTransition, checkNcTransition } from './quality';
+import { coverageBySector, requiredTrainings, trainingExpiry } from './training';
+import { dailyConsumption, signedDelta, stockByLot, type LedgerMovement } from './supplies';
+import { buildAlertCandidates, type AlertInput } from './alerts';
+import { consolidateOperationalFacts } from './consolidation';
+import { evaluateStock } from '../rules/operations';
+
+describe('quality workflows', () => {
+  it('requires actions before treatment, finished actions before effectiveness and a result to close', () => {
+    const j = 'Motivo registrado pela CCIH';
+    expect(checkNcTransition('aberta', 'em_tratamento', { justification: j, actions: [], effectiveness: null }).map((p) => p.path)).toEqual(['actions']);
+    expect(checkNcTransition('aberta', 'em_tratamento', { justification: j, actions: [{ status: 'pendente' }], effectiveness: null })).toEqual([]);
+    expect(checkNcTransition('em_tratamento', 'aguardando_eficacia', { justification: j, actions: [{ status: 'em_andamento' }], effectiveness: null }).map((p) => p.path)).toEqual(['actions']);
+    expect(checkNcTransition('aguardando_eficacia', 'encerrada', { justification: j, actions: [{ status: 'concluida' }], effectiveness: '' }).map((p) => p.path)).toEqual(['effectiveness']);
+    expect(checkNcTransition('encerrada', 'aberta', { justification: j, actions: [], effectiveness: 'ok' }).map((p) => p.path)).toEqual(['status']);
+  });
+
+  it('needs findings to conclude an audit and follows the defined flow', () => {
+    expect(checkAuditTransition('em_andamento', 'concluida', { justification: 'Auditoria realizada no setor', findings: null }).map((p) => p.path)).toEqual(['findings']);
+    expect(checkAuditTransition('planejada', 'encerrada', { justification: 'Pular etapas da auditoria', findings: 'x' }).map((p) => p.path)).toEqual(['status']);
+    expect(checkAuditTransition('verificacao_eficacia', 'plano_de_acao', { justification: 'Ações não foram eficazes', findings: 'x' })).toEqual([]);
+  });
+});
+
+describe('training coverage', () => {
+  const professionals = [
+    { id: 'p1', sectorId: 'uti', jobRoleId: 'enf', active: true },
+    { id: 'p2', sectorId: 'uti', jobRoleId: 'enf', active: true },
+    { id: 'p3', sectorId: 'uti', jobRoleId: 'med', active: true },
+    { id: 'p4', sectorId: 'uti', jobRoleId: 'enf', active: false },
+  ];
+  const trainings = [{ id: 't1', mandatory: true, validityMonths: 12, targetJobRoleIds: ['enf'] }, { id: 't2', mandatory: false, validityMonths: null, targetJobRoleIds: ['enf', 'med'] }];
+
+  it('counts each active targeted professional and the validity of the last attendance', () => {
+    const rows = requiredTrainings({
+      professionals, trainings, warningDays: 30, at: '2026-10-09',
+      attendances: [
+        { trainingId: 't1', professionalId: 'p1', heldOn: '2025-11-01', present: true },
+        { trainingId: 't1', professionalId: 'p2', heldOn: '2025-10-01', present: true },
+        { trainingId: 't1', professionalId: 'p2', heldOn: '2026-01-01', present: false },
+      ],
+    });
+    expect(rows.map((r) => [r.professionalId, r.state])).toEqual([['p1', 'vencendo'], ['p2', 'vencido']]);
+    expect(coverageBySector(rows).get('uti')).toEqual({ publico: 2, concluidos: 1 });
+    expect(trainingExpiry('2026-01-31', 1)).toBe('2026-03-03');
+    expect(trainingExpiry('2026-01-10', null)).toBeNull();
+  });
+});
+
+describe('supplies ledger', () => {
+  it('derives stock per lot and average consumption', () => {
+    const m: LedgerMovement[] = [
+      { lotId: 'a', kind: 'entrada', delta: signedDelta('entrada', 1000), occurredOn: '2026-09-01' },
+      { lotId: 'a', kind: 'consumo', delta: signedDelta('consumo', 300), occurredOn: '2026-09-20' },
+      { lotId: 'a', kind: 'ajuste', delta: signedDelta('ajuste', -10), occurredOn: '2026-09-21' },
+      { lotId: 'b', kind: 'descarte', delta: signedDelta('descarte', 5), occurredOn: '2026-09-21' },
+    ];
+    expect(stockByLot(m)).toEqual(new Map([['a', 690], ['b', -5]]));
+    expect(dailyConsumption(m, '2026-10-09')).toBe(10);
+    expect(dailyConsumption(m, '2026-12-01')).toBeNull();
+  });
+});
+
+describe('alert candidates', () => {
+  const base: AlertInput = { today: '2026-10-09', rules: { investigationOverdueDays: 7, deviceReviewDays: 7 }, openCases: [], openDevices: [], newMdr: [], trainingGaps: [], supplies: [], overdueActions: [], pendingFollowups: [] };
+
+  it('use only configured thresholds and produce stable deduplication keys', () => {
+    const input: AlertInput = {
+      ...base,
+      openCases: [{ id: 'c1', typeLabel: 'IPCS', patientLabel: 'MAS', openedOn: '2026-10-01', sectorId: 's' }, { id: 'c2', typeLabel: 'PAV', patientLabel: 'JB', openedOn: '2026-10-05', sectorId: 's' }],
+      openDevices: [{ id: 'd1', type: 'CVC', patientId: 'p1', patientLabel: 'MAS', insertedOn: '2026-10-02', sectorId: 's' }, { id: 'd2', type: 'SVD', patientId: 'p2', patientLabel: 'JB', insertedOn: '2026-10-03', sectorId: 's' }],
+      supplies: [{ id: 'x', name: 'Álcool 70%', evaluation: evaluateStock({ quantity: 0, dailyConsumption: 10 }, { defaultMinCoverageDays: 15, expiryWarningDays: 30 }, '2026-10-09') }],
+      trainingGaps: [{ trainingId: 't', trainingTitle: 'Higiene das mãos', sectorId: 's', overdue: 0 }],
+    };
+    const c = buildAlertCandidates(input);
+    expect(c.map((a) => a.dedupKey)).toEqual(['iras:c1', 'disp:d1', 'insumo:x:Indisponível']);
+    expect(c[0]).toMatchObject({ priority: 'alta', title: 'IPCS em aberto há 8 dias' });
+    expect(c[1]).toMatchObject({ title: 'CVC em D8: reavaliar indicação', link: '/pacientes/p1' });
+    expect(buildAlertCandidates({ ...input, rules: { investigationOverdueDays: undefined, deviceReviewDays: undefined } }).map((a) => a.kind)).toEqual(['insumo_critico']);
+  });
+});
+
+describe('operational consolidation', () => {
+  it('builds bundle, hand hygiene, alcohol and training facts per sector and month', () => {
+    const rows = consolidateOperationalFacts({
+      months: ['2026-09-01'],
+      bundleAudits: [
+        { date: '2026-09-03', sectorId: 'uti', metric: 'cvc', compliant: true },
+        { date: '2026-09-04', sectorId: 'uti', metric: 'cvc', compliant: false },
+        { date: '2026-09-04', sectorId: 'uti', metric: null, compliant: true },
+        { date: '2026-10-01', sectorId: 'uti', metric: 'vm', compliant: true },
+      ],
+      handHygiene: [{ date: '2026-09-10', sectorId: 'uti', opportunities: 20, actions: 15 }],
+      alcohol: [{ date: '2026-09-10', sectorId: 'uti', ml: 500 }, { date: '2026-09-11', sectorId: 'uti', ml: 250 }],
+      training: { professionals: [{ id: 'p', sectorId: 'uti', jobRoleId: 'enf', active: true }], trainings: [{ id: 't', mandatory: true, validityMonths: 12, targetJobRoleIds: ['enf'] }], attendances: [{ trainingId: 't', professionalId: 'p', heldOn: '2026-09-15', present: true }], warningDays: 30 },
+    });
+    expect(rows).toEqual([{ period: '2026-09-01', sectorId: 'uti', counts: { bundle_cvc_auditorias: 2, bundle_cvc_conformes: 1, hm_oportunidades: 20, hm_acoes: 15, alcool_ml: 750, treinamento_publico: 1, treinamento_concluidos: 1 } }]);
+  });
+});
