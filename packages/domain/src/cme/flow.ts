@@ -188,3 +188,15 @@ export function checkAssembly(load: { cycleStarted: boolean; status: LoadStatus;
   if (!load.sterilizerActive) return 'Equipamento bloqueado ou inativo.';
   return null;
 }
+
+/**
+ * Authorized exception: re-decides a sequence problem as if the requested step were expected.
+ * Safety checks (load not released, recall, expiry, blocked asset, duplicates) still apply.
+ */
+export function decideOverride(p: ProcessSnapshot, req: ScanRequest, config: FlowConfig): ScanDecision {
+  const first = decideScan(p, req, config);
+  if (!OVERRIDABLE.includes(first.result)) return first;
+  const forced = decideScan({ ...p, lastStep: p.lastStep === req.step ? p.lastStep : null, nextSteps: [req.step], plannedDestinationId: null }, req, config);
+  if (forced.result !== 'aceita') return forced;
+  return { ...forced, result: 'excecao_autorizada', message: `Exceção autorizada (${first.message}) ${forced.message}` };
+}

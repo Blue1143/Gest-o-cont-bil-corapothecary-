@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkChar, issueCode, parseCode } from './codes';
-import { checkAssembly, decideScan, postReleaseSteps, type FlowConfig, type ProcessSnapshot, type ProcessStep } from './flow';
+import { checkAssembly, decideOverride, decideScan, postReleaseSteps, type FlowConfig, type ProcessSnapshot, type ProcessStep } from './flow';
 
 const config: FlowConfig = { storageRequired: false, separationRequired: false };
 const today = '2026-10-09';
@@ -101,5 +101,14 @@ describe('processing flow', () => {
     expect(checkAssembly({ cycleStarted: true, status: 'aguardando', sterilizerActive: true })).toMatch(/já começou/);
     expect(checkAssembly({ cycleStarted: false, status: 'aguardando', sterilizerActive: false })).toMatch(/bloqueado/);
     expect(checkAssembly({ cycleStarted: false, status: 'aguardando', sterilizerActive: true })).toBeNull();
+  });
+
+  it('overrides sequence problems only, never safety blocks', () => {
+    const received = walk([['recepcao']]);
+    expect(decideOverride(received, { step: 'inspecao', today, outcome: 'aprovado' }, config)).toMatchObject({ result: 'excecao_autorizada', apply: { step: 'inspecao' } });
+    const loaded = walk([['recepcao'], ['limpeza'], ['inspecao', { outcome: 'aprovado' }], ['preparo'], ['embalagem'], ['esterilizacao']]);
+    const pending = { ...loaded, package: { ...released, loadStatus: 'aguardando' as const } };
+    expect(decideOverride(pending, { step: 'distribuicao', today, destinationId: 'cc' }, config).result).toBe('carga_nao_liberada');
+    expect(decideOverride(received, { step: 'recepcao', today }, config).result).toBe('duplicada');
   });
 });

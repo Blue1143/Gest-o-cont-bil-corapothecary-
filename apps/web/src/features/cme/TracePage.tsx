@@ -68,7 +68,7 @@ function Trace() {
 function traceSteps(r: TraceRow): TraceStep[] {
   const released = r.loadStatus === 'liberada';
   return [
-    { id: 'ciclo', title: `Ciclo ${r.loadCode}`, at: r.cycleStartedAt, detail: r.sterilizerName, status: 'ok' },
+    { id: 'ciclo', title: `Ciclo ${r.loadCode}`, ...(r.cycleStartedAt ? { at: r.cycleStartedAt } : {}), detail: r.cycleStartedAt ? r.sterilizerName : `${r.sterilizerName} · carga em montagem`, status: r.cycleStartedAt ? 'ok' : 'neutral' },
     { id: 'liberacao', title: `Carga ${LOAD_STATUS_LABEL[r.loadStatus].toLowerCase()}`, ...(r.statusAt ? { at: r.statusAt } : {}), detail: released ? 'Testes exigidos pela política aprovados' : 'Material não pode ser usado', status: released ? 'ok' : r.loadStatus === 'rejeitada' || r.loadStatus === 'reprocessamento' ? 'crit' : 'warn' },
     { id: 'uso', title: r.use ? (r.use.procedure ?? 'Uso sem cirurgia') : 'Uso', ...(r.use ? { at: r.use.usedAt } : {}), detail: r.use ? `Registrado por ${r.use.recordedBy}` : 'Ainda não utilizado', status: r.use ? 'ok' : 'neutral' },
     { id: 'paciente', title: 'Paciente', ...(r.use ? { at: r.use.usedAt } : {}), detail: r.use?.patient ? `${r.use.patient.initials} · ${r.use.patient.recordNumber}` : r.use?.procedure ? 'Vinculado (visível para perfis com acesso a pacientes)' : r.use ? 'Sem paciente vinculado' : '—', status: r.use?.procedure ? 'ok' : r.use ? 'warn' : 'neutral' },

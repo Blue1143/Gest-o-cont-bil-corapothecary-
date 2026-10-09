@@ -13,6 +13,7 @@ import { HttpError, conflict, notFound, parse } from '../http/errors';
 import { Instant, IsoDate, Justification, OptionalText, PageQuery, RowVersion, Text, Uuid, notFuture } from '../http/schemas';
 import { assertSector, escapeLike, institutionOrigin, surgerySummaries, type Db } from '../repositories/clinical';
 import { currentOnly, evaluateLoads, loadPolicy, testDtos, traceRows, materialUseDtos } from '../repositories/cme';
+import { loadFlowConfig } from '../repositories/cme-flow';
 
 const PACKAGING = z.enum(['papel_grau_cirurgico', 'sms', 'container_rigido', 'tecido_algodao', 'outro']);
 const LOAD_STATUS = z.enum(['aguardando', 'liberada', 'retida', 'rejeitada', 'reprocessamento']);
@@ -34,10 +35,13 @@ const SetBody = z
   .strict();
 const LoadCreate = z
   .object({
-    sterilizerId: Uuid, program: Text(80), startedAt: Instant.refine(notFuture, 'Data no futuro.'), notes: OptionalText(1000), reprocessedFromId: Uuid.nullable(),
-    items: z.array(z.object({ setId: Uuid.nullable(), description: OptionalText(200), quantity: z.number().int().min(1).max(500), packaging: PACKAGING.nullable(), implant: z.boolean().nullable() }).strict()).min(1).max(60),
+    // Without a start the load is created "em montagem": packages are added by reading at the assembly station.
+    sterilizerId: Uuid, program: Text(80), startedAt: Instant.refine(notFuture, 'Data no futuro.').nullable(), notes: OptionalText(1000), reprocessedFromId: Uuid.nullable(),
+    items: z.array(z.object({ setId: Uuid.nullable(), description: OptionalText(200), quantity: z.number().int().min(1).max(500), packaging: PACKAGING.nullable(), implant: z.boolean().nullable() }).strict()).max(60),
   })
-  .strict();
+  .strict()
+  .refine((b) => !b.startedAt || b.items.length > 0, { path: ['items'], message: 'Informe ao menos um pacote, ou crie a carga em montagem (sem início) e leia os pacotes.' });
+const CycleStart = z.object({ startedAt: Instant.refine(notFuture, 'Data no futuro.'), rowVersion: RowVersion }).strict();
 const CycleFinish = z
   .object({
     endedAt: Instant.refine(notFuture, 'Data no futuro.'), temperatureC: z.number().min(0).max(300).nullable(), pressureKpa: z.number().min(0).max(1000).nullable(),
@@ -102,7 +106,7 @@ async function findLoad(db: Db, auth: AuthContext, id: string) {
 /** A package by its printed label, with what decides whether it can be used. */
 async function findItemByLabel(db: Db, auth: AuthContext, labelCode: string) {
   const item = await db.selectFrom('load_item as i').innerJoin('sterilization_load as l', 'l.id', 'i.load_id').innerJoin('sterilizer as s', 's.id', 'l.sterilizer_id')
-    .select(['i.id', 'i.label_code', 'i.expires_on', 'i.set_id', 'l.status', 'l.code', 's.sector_id as cme_sector'])
+    .select(['i.id', 'i.label_code', 'i.expires_on', 'i.set_id', 'i.process_id', 'l.status', 'l.code', 's.sector_id as cme_sector'])
     .where('i.institution_id', '=', auth.institutionId).where('i.label_code', '=', labelCode).executeTakeFirst();
   if (!item) throw fieldError('labelCode', 'Etiqueta não encontrada. Confira o código impresso no pacote.');
   const used = await db.selectFrom('material_use').select('id').where('item_id', '=', item.id).where('voided_at', 'is', null).executeTakeFirst();
@@ -148,7 +152,7 @@ async function loadSummaries(db: Db, auth: AuthContext, ids: string[]): Promise<
     const r = byId.get(id);
     if (!r) return [];
     return [{
-      id: r.id, code: r.code, sterilizerId: r.sterilizer_id, sterilizerName: r.name, program: r.program, startedAt: r.started_at.toISOString(), endedAt: r.ended_at?.toISOString() ?? null,
+      id: r.id, code: r.code, sterilizerId: r.sterilizer_id, sterilizerName: r.name, program: r.program, startedAt: r.started_at?.toISOString() ?? null, endedAt: r.ended_at?.toISOString() ?? null,
       physical: r.physical_result, status: r.status, suggestion: evals.get(r.id)?.evaluation.status ?? 'aguardando', hasImplant: r.has_implant,
       items: Number(r.items ?? 0), used: Number(r.used ?? 0), origin: r.data_origin, reprocessedFromId: r.reprocessed_from_id,
     }];
@@ -334,7 +338,7 @@ export async function cmeRoutes(app: FastifyInstance, { db }: { db: Kysely<DB> }
       if (!packaging) throw fieldError(`items.${idx}.packaging`, 'Informe a embalagem.');
       return { setId: set?.id ?? null, description, quantity: it.quantity, packaging, implant: it.implant ?? set?.implant ?? false };
     });
-    const day = dateInZone(b.startedAt, tz);
+    const day = dateInZone(b.startedAt ?? new Date(), tz);
     const expiresOn = sterileUntil(day, rules.cme.shelfLifeDays?.value);
     const origin = await institutionOrigin(db, auth.institutionId);
     const created = await db.transaction().execute(async (trx) => {
@@ -346,14 +350,15 @@ export async function cmeRoutes(app: FastifyInstance, { db }: { db: Kysely<DB> }
         if (src.status !== 'reprocessamento' && src.status !== 'rejeitada') throw fieldError('reprocessedFromId', 'Só cargas rejeitadas ou enviadas para reprocessamento podem ser reprocessadas.');
         if (await trx.selectFrom('sterilization_load').select('id').where('reprocessed_from_id', '=', b.reprocessedFromId).executeTakeFirst()) throw fieldError('reprocessedFromId', 'Esta carga já foi reprocessada.');
       }
-      const seq = Number((await trx.selectFrom('sterilization_load').select((e) => e.fn.countAll<string>().as('n')).where('sterilizer_id', '=', st.id)
-        .where('started_at', '>=', zonedInstant(day, 0, tz)).where('started_at', '<', zonedInstant(addDays(day, 1), 0, tz)).executeTakeFirstOrThrow()).n) + 1;
-      const code = loadCode(st.code, day, seq);
+      // Next sequence of this sterilizer and day, read from the codes (loads in assembly have no start yet).
+      const prefix = loadCode(st.code, day, 0).slice(0, -2);
+      const last = await trx.selectFrom('sterilization_load').select('code').where('institution_id', '=', auth.institutionId).where('code', 'like', `${prefix}%`).orderBy('code', 'desc').limit(1).executeTakeFirst();
+      const code = loadCode(st.code, day, (last ? Number(last.code.slice(-2)) : 0) + 1);
       const load = await trx.insertInto('sterilization_load').values({
         institution_id: auth.institutionId, sterilizer_id: st.id, code, program: b.program, started_at: b.startedAt, operator_id: auth.userId, operator_name: auth.displayName,
         notes: b.notes, has_implant: items.some((i) => i.implant), reprocessed_from_id: b.reprocessedFromId, data_origin: origin,
       }).returningAll().executeTakeFirstOrThrow();
-      await trx.insertInto('load_item').values(items.map((i, idx) => ({
+      if (items.length) await trx.insertInto('load_item').values(items.map((i, idx) => ({
         institution_id: auth.institutionId, load_id: load.id, position: idx + 1, label_code: itemLabel(code, idx + 1), set_id: i.setId, description: i.description,
         quantity: i.quantity, packaging: i.packaging, implant: i.implant, expires_on: expiresOn,
       }))).execute();
@@ -365,12 +370,34 @@ export async function cmeRoutes(app: FastifyInstance, { db }: { db: Kysely<DB> }
     return { id: created.id, code: created.code };
   });
 
+  /** Start of the cycle of a load assembled by reading (its packages are then fixed). */
+  app.post<{ Params: { id: string } }>('/cme/loads/:id/start', edit, async (req) => {
+    const auth = requireAuth(req);
+    const id = parse(Uuid, req.params.id);
+    const b = parse(CycleStart, req.body);
+    const l = await findLoad(db, auth, id);
+    if (l.started_at) throw new HttpError(409, 'ciclo_iniciado', 'O ciclo desta carga já foi iniciado.');
+    if (b.startedAt.getTime() < l.created_at.getTime() - 60_000) throw fieldError('startedAt', 'O início não pode ser anterior à montagem da carga.');
+    return db.transaction().execute(async (trx) => {
+      const before = await trx.selectFrom('sterilization_load').selectAll().where('id', '=', id).forUpdate().executeTakeFirstOrThrow();
+      if (before.row_version !== b.rowVersion) throw conflict();
+      const st = await trx.selectFrom('sterilizer').select('status').where('id', '=', before.sterilizer_id).executeTakeFirstOrThrow();
+      if (st.status !== 'ativo') throw fieldError('startedAt', 'Equipamento bloqueado ou inativo: o ciclo não pode começar.');
+      const packages = Number((await trx.selectFrom('load_item').select((e) => e.fn.countAll<string>().as('n')).where('load_id', '=', id).executeTakeFirstOrThrow()).n);
+      if (!packages) throw fieldError('startedAt', 'Carga sem pacotes: leia os pacotes na estação de montagem.');
+      const after = await trx.updateTable('sterilization_load').set({ started_at: b.startedAt, updated_at: new Date(), row_version: before.row_version + 1 }).where('id', '=', id).returningAll().executeTakeFirstOrThrow();
+      await audit(trx, actorOf(req), { action: 'update', entity: 'sterilization_load', entityId: id, before, after, context: { step: 'inicio_do_ciclo', packages } });
+      return { ok: true, rowVersion: after.row_version };
+    });
+  });
+
   app.post<{ Params: { id: string } }>('/cme/loads/:id/cycle', edit, async (req) => {
     const auth = requireAuth(req);
     const id = parse(Uuid, req.params.id);
     const b = parse(CycleFinish, req.body);
     const l = await findLoad(db, auth, id);
     if (l.ended_at) throw new HttpError(409, 'ciclo_encerrado', 'O ciclo desta carga já foi encerrado.');
+    if (!l.started_at) throw new HttpError(409, 'ciclo_nao_iniciado', 'Inicie o ciclo antes de encerrá-lo.');
     if (b.endedAt <= l.started_at) throw fieldError('endedAt', 'O término deve ser depois do início do ciclo.');
     return db.transaction().execute(async (trx) => {
       const before = await trx.selectFrom('sterilization_load').selectAll().where('id', '=', id).forUpdate().executeTakeFirstOrThrow();
@@ -498,10 +525,20 @@ export async function cmeRoutes(app: FastifyInstance, { db }: { db: Kysely<DB> }
     const item = await findItemByLabel(db, auth, labelCode);
     const problems = checkItemUse({ loadStatus: item.status, expiresOn: item.expires_on, alreadyUsed: item.alreadyUsed }, dateInZone(usedAt, tz));
     if (problems.length) throw problemsError(problems);
+    // Packages tracked by the flow must have left the CME. During the configured transition the use is
+    // accepted and the missing exit becomes an alert; from the configured date on it is refused.
+    const process = item.process_id ? await db.selectFrom('cme_process').select(['id', 'state', 'row_version']).where('id', '=', item.process_id).executeTakeFirst() : null;
+    const withoutExit = !!process && process.state !== 'distribuido';
+    if (withoutExit) {
+      const config = await loadFlowConfig(db, auth.institutionId);
+      if (config.exitRequiredFrom && dateInZone(new Date(), tz) >= config.exitRequiredFrom) throw fieldError('labelCode', 'Pacote sem saída registrada do CME: registre a distribuição antes do uso.');
+    }
     const origin = await institutionOrigin(db, auth.institutionId);
     try {
       return await db.transaction().execute(async (trx) => {
         const created = await trx.insertInto('material_use').values({ institution_id: auth.institutionId, item_id: item.id, surgery_id: surgeryId, sector_id: sectorId, used_at: usedAt, recorded_by: auth.userId, recorded_by_name: auth.displayName, data_origin: origin }).returningAll().executeTakeFirstOrThrow();
+        // The package is out of the CME now; when it comes back dirty, the reception opens a new round.
+        if (withoutExit) await trx.updateTable('cme_process').set({ state: 'distribuido', next_steps: ['devolucao'], destination_sector_id: sectorId, updated_at: new Date(), row_version: process.row_version + 1 }).where('id', '=', process.id).execute();
         await audit(trx, actorOf(req), { action: 'create', entity: 'material_use', entityId: created.id, after: { ...created, labelCode: item.label_code, load: item.code } });
         return { id: created.id };
       });

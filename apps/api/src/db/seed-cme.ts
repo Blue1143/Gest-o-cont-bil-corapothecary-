@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Transaction } from 'kysely';
-import { addDays, dateInZone, evaluateLoadRelease, itemLabel, loadCode, sterileUntil, todayIn, zonedInstant, type LoadStatus, type LoadTest } from '@ccih/domain';
-import { DEMO_LOAD_POLICY, DEMO_SETS, DEMO_STERILIZERS, generateCme } from '@ccih/demo-data';
+import { addDays, dateInZone, evaluateLoadRelease, issueCode, itemLabel, loadCode, sterileUntil, todayIn, zonedInstant, type LoadStatus, type LoadTest, type ProcessStep } from '@ccih/domain';
+import { DEMO_LOAD_POLICY, DEMO_SETS, DEMO_STERILIZERS, generateCme, hashSeed, rng } from '@ccih/demo-data';
 import type { DB } from './types';
 
 export interface CmeSeedContext {
@@ -122,5 +122,69 @@ export async function seedCme(trx: Transaction<DB>, ctx: CmeSeedContext) {
     institution_id: inst, item_id: itemIds.get(`${u.loadKey}#${u.itemIndex}`)!, surgery_id: u.surgeryId, sector_id: u.surgeryId ? surgerySector.get(u.surgeryId)! : ctx.sectorIds.get(u.sectorCode!)!,
     used_at: u.usedAt, recorded_by: null, recorded_by_name: u.surgeryId ? 'Centro cirúrgico (demonstração)' : 'Enfermagem (demonstração)', data_origin: origin,
   })));
-  return { cmeLoads: loads.length, cmeTests: tests.length + bdRows.length, cmeUses: data.uses.length };
+  const flow = await seedFlow(trx, ctx, sets);
+  return { cmeLoads: loads.length, cmeTests: tests.length + bdRows.length, cmeUses: data.uses.length, ...flow };
+}
+
+/** Demo stations (one per step group), physical assets with issued codes and a few materials in progress. */
+export const DEMO_STATIONS: Array<{ name: string; location: string; steps: ProcessStep[] }> = [
+  { name: 'Expurgo — recepção', location: 'Área suja', steps: ['recepcao'] },
+  { name: 'Limpeza', location: 'Área suja', steps: ['limpeza'] },
+  { name: 'Inspeção e preparo', location: 'Área limpa', steps: ['inspecao', 'preparo'] },
+  { name: 'Embalagem', location: 'Área limpa', steps: ['embalagem'] },
+  { name: 'Montagem de carga', location: 'Área de esterilização', steps: ['esterilizacao'] },
+  { name: 'Arsenal', location: 'Área estéril', steps: ['armazenamento', 'separacao'] },
+  { name: 'Expedição', location: 'Área estéril', steps: ['distribuicao'] },
+  { name: 'Devoluções', location: 'Área suja', steps: ['devolucao'] },
+];
+
+async function seedFlow(trx: Transaction<DB>, ctx: CmeSeedContext, sets: Map<string, { id: string; name: string }>) {
+  const inst = ctx.institutionId;
+  const cmeSector = ctx.sectorIds.get('cme')!;
+  const r = rng(hashSeed('cme-flow'));
+  await trx.insertInto('cme_flow_config').values({ institution_id: inst, updated_at: ctx.now }).execute();
+  const stationIds = new Map<string, string>();
+  for (const st of DEMO_STATIONS) {
+    // Demo stations do not require pairing so any browser can try them; a real installation pairs each workstation.
+    const row = await trx.insertInto('scan_station').values({
+      institution_id: inst, sector_id: cmeSector, name: st.name, location: st.location, steps: st.steps, input_methods: ['leitor', 'camera', 'manual'], symbologies: ['code128', 'code39'],
+      device_label: null, responsible_user_id: null, require_pairing: false, scan_config: JSON.stringify({ maxKeyIntervalMs: 35, minLength: 6, terminator: 'enter' }), updated_at: ctx.now,
+    }).returning('id').executeTakeFirstOrThrow();
+    for (const step of st.steps) stationIds.set(step, row.id);
+  }
+  const assets: Array<{ id: string; code: string; setId: string; name: string }> = [];
+  for (const s of DEMO_SETS) {
+    const set = sets.get(s.code)!;
+    for (let i = 0; i < 2; i++) {
+      const code = issueCode('ativo', r);
+      const row = await trx.insertInto('instrument_asset').values({ institution_id: inst, set_id: set.id, code, tag: `${s.code}-${i + 1}`, data_origin: 'demo' }).returning('id').executeTakeFirstOrThrow();
+      assets.push({ id: row.id, code, setId: set.id, name: set.name });
+    }
+  }
+  // Materials in progress: received three hours ago and moved step by step, every 20 minutes.
+  const chains: ProcessStep[][] = [['recepcao'], ['recepcao', 'limpeza'], ['recepcao', 'limpeza', 'inspecao'], ['recepcao', 'limpeza', 'inspecao', 'preparo', 'embalagem'], ['recepcao', 'limpeza', 'inspecao', 'preparo', 'embalagem']];
+  const next: Record<string, ProcessStep[]> = { recepcao: ['limpeza'], limpeza: ['inspecao'], inspecao: ['preparo'], preparo: ['embalagem'], embalagem: ['esterilizacao'] };
+  const start = ctx.now.getTime() - 3 * 3_600_000;
+  let events = 0;
+  for (const [i, chain] of chains.entries()) {
+    const asset = assets.filter((a) => !a.name.includes('Ótica'))[i * 3]!;
+    const last = chain.at(-1)!;
+    const process = await trx.insertInto('cme_process').values({
+      institution_id: inst, asset_id: asset.id, set_id: asset.setId, description: asset.name, current_step: last, state: 'em_processo', next_steps: next[last]!,
+      opened_at: new Date(start + i * 5 * 60_000), updated_at: new Date(start + (i * 5 + (chain.length - 1) * 20) * 60_000), data_origin: 'demo',
+    }).returning('id').executeTakeFirstOrThrow();
+    let previous: string | null = null;
+    for (const [k, step] of chain.entries()) {
+      const at = new Date(start + (i * 5 + k * 20) * 60_000);
+      const ev = await trx.insertInto('cme_scan_event').values({
+        institution_id: inst, station_id: stationIds.get(step)!, device_id: null, client_event_id: null, raw_code: asset.code, code_kind: 'ativo', symbology: 'code128', input_method: 'leitor',
+        process_id: process.id, asset_id: asset.id, load_item_id: null, load_id: null, step, operation: 'registrar_etapa', outcome: step === 'inspecao' ? 'aprovado' : null, details: null,
+        result: 'aceita', message: 'Etapa registrada.', user_id: null, user_name: OPERATOR, server_at: at, device_at: null, origin_sector_id: step === 'recepcao' ? ctx.sectorIds.get('centro-cirurgico')! : null,
+        destination_sector_id: null, justification: null, previous_event_id: previous, data_origin: 'demo',
+      }).returning('id').executeTakeFirstOrThrow();
+      previous = ev.id;
+      events++;
+    }
+  }
+  return { cmeStations: DEMO_STATIONS.length, cmeAssets: assets.length, cmeFlowEvents: events };
 }

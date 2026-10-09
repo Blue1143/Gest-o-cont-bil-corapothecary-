@@ -45,21 +45,27 @@ export async function evaluateLoads(db: Db, institutionId: string, loadIds: stri
     .select(['l.id', 'l.sterilizer_id', 'l.started_at', 'l.physical_result', 'l.has_implant', 's.type'])
     .where('l.institution_id', '=', institutionId).where('l.id', 'in', loadIds).execute();
   const tests = await db.selectFrom('sterilization_test').selectAll().where('load_id', 'in', loadIds).orderBy('performed_at').execute();
-  const days = [...new Set(loads.map((l) => `${l.sterilizer_id}|${dateInZone(l.started_at, tz)}`))];
-  const bd = days.length
+  const started = loads.filter((l): l is typeof l & { started_at: Date } => l.started_at != null);
+  const bd = started.length
     ? await db.selectFrom('sterilization_test').selectAll().where('institution_id', '=', institutionId).where('type', '=', 'BOWIE_DICK')
-      .where('sterilizer_id', 'in', [...new Set(loads.map((l) => l.sterilizer_id))]).where('performed_on', 'in', [...new Set(loads.map((l) => dateInZone(l.started_at, tz)))]).orderBy('performed_at').execute()
+      .where('sterilizer_id', 'in', [...new Set(started.map((l) => l.sterilizer_id))]).where('performed_on', 'in', [...new Set(started.map((l) => dateInZone(l.started_at, tz)))]).orderBy('performed_at').execute()
     : [];
   const currentBd = currentOnly(bd);
   for (const l of loads) {
     const mine = tests.filter((t) => t.load_id === l.id);
     const current = currentOnly(mine);
-    const day = dateInZone(l.started_at, tz);
+    const applies = bowieDickApplies(l.type);
+    if (!l.started_at) {
+      // Assembly: nothing to evaluate until the cycle runs.
+      out.set(l.id, { evaluation: { status: 'aguardando', reasons: ['Carga em montagem: o ciclo ainda não começou.'], policyApplied: !!policy }, bowieDickApplies: applies, equipmentBowieDick: null, tests: mine });
+      continue;
+    }
+    const startedAt = l.started_at;
+    const day = dateInZone(startedAt, tz);
     // Latest Bowie-Dick of the day before the cycle started (a test done later does not cover it).
-    const equipment = currentBd.filter((t) => t.sterilizer_id === l.sterilizer_id && t.performed_on === day && t.performed_at <= l.started_at).at(-1) ?? null;
+    const equipment = currentBd.filter((t) => t.sterilizer_id === l.sterilizer_id && t.performed_on === day && t.performed_at <= startedAt).at(-1) ?? null;
     const loadTests: LoadTest[] = current.map((t) => ({ type: t.type, result: t.result }));
     if (l.physical_result) loadTests.push({ type: 'REGISTRO_FISICO', result: l.physical_result === 'conforme' ? 'aprovado' : 'reprovado' });
-    const applies = bowieDickApplies(l.type);
     out.set(l.id, {
       evaluation: evaluateLoadRelease({ tests: loadTests, hasImplant: l.has_implant, bowieDickApplies: applies, ...(equipment ? { equipmentBowieDick: equipment.result } : {}) }, policy),
       bowieDickApplies: applies, equipmentBowieDick: equipment, tests: mine,
@@ -113,7 +119,7 @@ export async function traceRows(db: Db, auth: AuthContext, f: TraceFilter): Prom
     truncated: rows.length > f.limit,
     rows: page.map((r) => ({
       itemId: r.id, labelCode: r.label_code, description: r.description, setCode: r.set_code, implant: r.implant, loadId: r.load_id, loadCode: r.load_code,
-      loadStatus: r.status, cycleStartedAt: r.started_at.toISOString(), sterilizerName: r.sterilizer, expiresOn: r.expires_on,
+      loadStatus: r.status, cycleStartedAt: r.started_at?.toISOString() ?? null, sterilizerName: r.sterilizer, expiresOn: r.expires_on,
       statusAt: r.status_at ? new Date(r.status_at as Date).toISOString() : null, use: useMap.get(r.id) ?? null,
     })),
   };
@@ -125,6 +131,6 @@ export async function surgeryMaterials(db: Db, surgeryId: string): Promise<Surge
     .where('u.surgery_id', '=', surgeryId).where('u.voided_at', 'is', null).orderBy('u.used_at').execute();
   return rows.map((r) => ({
     useId: r.id, itemId: r.item_id, labelCode: r.label_code, description: r.description, implant: r.implant, loadId: r.load_id, loadCode: r.code, loadStatus: r.status,
-    sterilizerName: r.name, cycleStartedAt: r.started_at.toISOString(), usedAt: r.used_at.toISOString(),
+    sterilizerName: r.name, cycleStartedAt: r.started_at?.toISOString() ?? null, usedAt: r.used_at.toISOString(),
   }));
 }

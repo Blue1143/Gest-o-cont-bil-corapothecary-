@@ -60,7 +60,7 @@ function LoadDetailView() {
       {l.reprocessedFromId ? <p className="ig-small">Reprocessamento de outra carga: <Link to={`/cme/cargas/${l.reprocessedFromId}`}>ver carga de origem</Link>.</p> : null}
       {l.reprocessedIntoId ? <p className="ig-small">Pacotes reprocessados: <Link to={`/cme/cargas/${l.reprocessedIntoId}`}>ver nova carga</Link>.</p> : null}
 
-      <SterilizationCycle timeZone={tz} equipment={l.sterilizerName} cycle={l.code} startedAt={l.startedAt} program={l.program} operator={l.operatorName}
+      <SterilizationCycle timeZone={tz} equipment={l.sterilizerName} cycle={l.code} {...(l.startedAt ? { startedAt: l.startedAt } : {})} program={l.program} operator={l.operatorName}
         parameters={[
           { name: 'Temperatura', value: l.temperatureC != null ? `${l.temperatureC} °C` : '—' },
           { name: 'Pressão', value: l.pressureKpa != null ? `${l.pressureKpa} kPa` : '—' },
@@ -152,7 +152,7 @@ function CycleForm({ load, onDone }: { load: LoadDetail; onDone: () => void }) {
   const m = useCmeMutation(() => cme.finishCycle(load.id, { endedAt: localToIso(d.endedAt, tz)!, temperatureC: num(d.temperatureC), pressureKpa: num(d.pressureKpa), exposureMinutes: num(d.exposureMinutes), physicalResult: d.physicalResult as 'conforme', notes: d.notes.trim() || null, rowVersion: load.rowVersion }));
   const submit = () => {
     const e = {
-      endedAt: d.endedAt && localToIso(d.endedAt, tz)! > load.startedAt ? undefined : 'O término deve ser depois do início.',
+      endedAt: d.endedAt && load.startedAt && localToIso(d.endedAt, tz)! > load.startedAt ? undefined : 'O término deve ser depois do início.',
       physicalResult: d.physicalResult ? undefined : 'Informe o resultado do registro físico.',
       temperatureC: d.temperatureC && !Number.isFinite(num(d.temperatureC)) ? 'Número inválido.' : undefined,
       exposureMinutes: d.exposureMinutes && !Number.isInteger(num(d.exposureMinutes)) ? 'Minutos inteiros.' : undefined,

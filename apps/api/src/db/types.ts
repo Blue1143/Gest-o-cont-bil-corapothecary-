@@ -465,7 +465,7 @@ export interface InstrumentSetTable {
 }
 
 export interface SterilizationLoadTable {
-  id: Generated<string>; institution_id: string; sterilizer_id: string; code: string; program: string; started_at: Timestamp; ended_at: NullableTimestamp;
+  id: Generated<string>; institution_id: string; sterilizer_id: string; code: string; program: string; started_at: NullableTimestamp; ended_at: NullableTimestamp;
   operator_id: string | null; operator_name: string;
   /** numeric: pg returns a string. */
   temperature_c: ColumnType<string | null, number | null | undefined, number | null>;
@@ -477,7 +477,7 @@ export interface SterilizationLoadTable {
 
 export interface LoadItemTable {
   id: Generated<string>; institution_id: string; load_id: string; position: number; label_code: string; set_id: string | null; description: string;
-  quantity: Generated<number>; packaging: PackagingCol; implant: Generated<boolean>; expires_on: string | null;
+  quantity: Generated<number>; packaging: PackagingCol; implant: Generated<boolean>; expires_on: string | null; process_id: string | null;
 }
 
 export interface SterilizationTestTable {
@@ -503,6 +503,49 @@ export interface AttachmentTable {
   id: Generated<string>; institution_id: string; entity: 'sterilization_test' | 'training_session'; entity_id: string; file_name: string;
   mime: 'application/pdf' | 'image/png' | 'image/jpeg'; size_bytes: number; sha256: string; storage_key: string; uploaded_by: string | null;
   uploaded_by_name: string; created_at: CreatedAt;
+}
+
+type ProcessStepCol = 'recepcao' | 'limpeza' | 'inspecao' | 'preparo' | 'embalagem' | 'esterilizacao' | 'liberacao' | 'armazenamento' | 'separacao' | 'distribuicao' | 'devolucao';
+type ProcessStateCol = 'em_processo' | 'bloqueado' | 'liberado' | 'distribuido' | 'devolvido' | 'encerrado' | 'descartado';
+type ScanResultCol = 'aceita' | 'codigo_desconhecido' | 'etapa_incorreta' | 'duplicada' | 'bloqueado' | 'carga_nao_liberada' | 'destino_incompativel' | 'requer_conferencia' | 'estacao_invalida' | 'excecao_autorizada';
+type InputMethodCol = 'leitor' | 'camera' | 'manual';
+
+export interface CmeFlowConfigTable {
+  institution_id: string; storage_required: Generated<boolean>; separation_required: Generated<boolean>; exit_required_from: string | null;
+  manual_requires_justification: Generated<boolean>; updated_at: Generated<Date>; row_version: Generated<number>;
+}
+
+export interface InstrumentAssetTable {
+  id: Generated<string>; institution_id: string; set_id: string; code: string; tag: string | null;
+  status: ColumnType<'ativo' | 'manutencao' | 'baixado', 'ativo' | 'manutencao' | 'baixado' | undefined, 'ativo' | 'manutencao' | 'baixado'>;
+  status_reason: string | null; data_origin: 'real' | 'demo'; created_at: CreatedAt; updated_at: Generated<Date>; row_version: Generated<number>;
+}
+
+export interface ScanStationTable {
+  id: Generated<string>; institution_id: string; sector_id: string; name: string; location: string | null; steps: ProcessStepCol[];
+  input_methods: InputMethodCol[]; symbologies: string[]; device_label: string | null; responsible_user_id: string | null; require_pairing: Generated<boolean>;
+  scan_config: ColumnType<unknown, string | undefined, string>; enabled: Generated<boolean>; last_seen_at: NullableTimestamp;
+  created_at: CreatedAt; updated_at: Generated<Date>; row_version: Generated<number>;
+}
+
+export interface StationDeviceTable {
+  id: Generated<string>; station_id: string; token_hash: string; label: string; paired_by: string | null; paired_by_name: string; paired_at: CreatedAt;
+  revoked_at: NullableTimestamp; revoked_by_name: string | null; last_seen_at: NullableTimestamp;
+}
+
+export interface CmeProcessTable {
+  id: Generated<string>; institution_id: string; asset_id: string | null; code: string | null; set_id: string | null; description: string;
+  current_step: ProcessStepCol; state: ProcessStateCol; next_steps: ColumnType<ProcessStepCol[], ProcessStepCol[] | undefined, ProcessStepCol[]>;
+  load_item_id: string | null; destination_sector_id: string | null; legacy: Generated<boolean>; previous_process_id: string | null;
+  opened_at: CreatedAt; closed_at: NullableTimestamp; data_origin: 'real' | 'demo'; updated_at: Generated<Date>; row_version: Generated<number>;
+}
+
+export interface CmeScanEventTable {
+  id: Generated<string>; institution_id: string; station_id: string | null; device_id: string | null; client_event_id: string | null; raw_code: string;
+  code_kind: string; symbology: string | null; input_method: InputMethodCol; process_id: string | null; asset_id: string | null;
+  load_item_id: string | null; load_id: string | null; step: ProcessStepCol; operation: string; outcome: string | null; details: ColumnType<unknown, string | null, never>;
+  result: ScanResultCol; message: string; user_id: string | null; user_name: string; server_at: CreatedAt; device_at: NullableTimestamp;
+  origin_sector_id: string | null; destination_sector_id: string | null; justification: string | null; previous_event_id: string | null; data_origin: 'real' | 'demo';
 }
 
 export interface DB {
@@ -563,4 +606,10 @@ export interface DB {
   load_release_decision: LoadReleaseDecisionTable;
   material_use: MaterialUseTable;
   attachment: AttachmentTable;
+  cme_flow_config: CmeFlowConfigTable;
+  instrument_asset: InstrumentAssetTable;
+  scan_station: ScanStationTable;
+  station_device: StationDeviceTable;
+  cme_process: CmeProcessTable;
+  cme_scan_event: CmeScanEventTable;
 }

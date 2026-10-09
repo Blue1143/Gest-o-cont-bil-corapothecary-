@@ -111,10 +111,19 @@ async function collectCme(db: Kysely<DB>, institutionId: string, now: Date, toda
   // IB tests can be replaced by a reading made after the 30-day window started: look at all replacements.
   const ibReplacements = ib.length ? await db.selectFrom('sterilization_test').select(['id', 'replaces_id']).where('replaces_id', 'in', ib.map((t) => t.id)).execute() : [];
   const replacedIb = new Set(ibReplacements.map((r) => r.replaces_id));
+  // Uses of flow-tracked packages with no accepted exit reading before the use.
+  // The pending exit belongs to the CME team: the alert takes the sector of the sterilizer, not of the use.
+  const usesWithoutExit = await db.selectFrom('material_use as u').innerJoin('load_item as i', 'i.id', 'u.item_id').innerJoin('cme_process as p', 'p.id', 'i.process_id')
+    .innerJoin('sterilization_load as sl', 'sl.id', 'i.load_id').innerJoin('sterilizer as st', 'st.id', 'sl.sterilizer_id')
+    .select(['u.id', 'u.used_at', 'st.sector_id', 'i.label_code', 'p.id as process_id'])
+    .where('u.institution_id', '=', institutionId).where('u.voided_at', 'is', null).where('u.used_at', '>=', since30)
+    .where(({ not, exists, selectFrom }) => not(exists(selectFrom('cme_scan_event as e').select('e.id').whereRef('e.process_id', '=', 'p.id').where('e.step', '=', 'distribuicao').where('e.result', 'in', ['aceita', 'excecao_autorizada']).whereRef('e.server_at', '<=', 'u.used_at'))))
+    .execute();
   const { policy } = await loadPolicy(db, institutionId);
   const evals = await evaluateLoads(db, institutionId, released.map((l) => l.id), tz, policy);
   const currentBd = currentOnly(bd);
   return {
+    usesWithoutExit: usesWithoutExit.map((u) => ({ useId: u.id, labelCode: u.label_code, processId: u.process_id, usedOn: dateInZone(u.used_at, tz), sectorId: u.sector_id })),
     recalledLoads: recalls.map((r) => ({ loadId: r.id, code: r.code, surgeries: Number(r.surgeries ?? 0), patients: Number(r.patients ?? 0), sectorId: r.sector_id })),
     releasedWithFailure: released.flatMap((l) => {
       const ev = evals.get(l.id)?.evaluation;

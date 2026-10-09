@@ -2,6 +2,8 @@ import type { DataOrigin } from '../provenance';
 import type { PatientRef } from '../clinical/dto';
 import type { LoadReleaseEvaluation, LoadStatus, SterilizationTestType, TestResult } from '../rules/sterilization';
 import type { EquipmentStatus, IbControl, PackagingType, PhysicalResult, RecordedTestType, SterilizerType } from './cme';
+import type { Symbology } from './codes';
+import type { InputMethod, ProcessState, ProcessStep, ScanResult } from './flow';
 
 /** Payloads of the CME module (Phase 5), shared by the API and the web client. */
 
@@ -34,7 +36,9 @@ export interface LoadItemDto {
 }
 
 export interface LoadSummary {
-  id: string; code: string; sterilizerId: string; sterilizerName: string; program: string; startedAt: string; endedAt: string | null;
+  id: string; code: string; sterilizerId: string; sterilizerName: string; program: string;
+  /** Null while the load is being assembled (the cycle has not started). */
+  startedAt: string | null; endedAt: string | null;
   physical: PhysicalResult | null; status: LoadStatus; suggestion: LoadStatus; hasImplant: boolean; items: number; used: number;
   origin: DataOrigin; reprocessedFromId: string | null;
 }
@@ -61,7 +65,7 @@ export interface CmeOverview {
 /** One link of the traceability chain: package → load → sterilizer, and package → use → surgery → patient. */
 export interface TraceRow {
   itemId: string; labelCode: string; description: string; setCode: string | null; implant: boolean;
-  loadId: string; loadCode: string; loadStatus: LoadStatus; cycleStartedAt: string; sterilizerName: string; expiresOn: string | null;
+  loadId: string; loadCode: string; loadStatus: LoadStatus; cycleStartedAt: string | null; sterilizerName: string; expiresOn: string | null;
   /** When the load reached its current status (last release decision). */
   statusAt: string | null;
   use: ItemUseDto | null;
@@ -71,5 +75,47 @@ export interface TraceResult { query: string; rows: TraceRow[]; truncated: boole
 /** Materials used in a surgery (backward traceability from the surgical record). */
 export interface SurgeryMaterialDto {
   useId: string; itemId: string; labelCode: string; description: string; implant: boolean; loadId: string; loadCode: string; loadStatus: LoadStatus;
-  sterilizerName: string; cycleStartedAt: string; usedAt: string;
+  sterilizerName: string; cycleStartedAt: string | null; usedAt: string;
+}
+
+/* ---------- Processing flow and reading stations ---------- */
+
+export interface FlowConfigDto { storageRequired: boolean; separationRequired: boolean; exitRequiredFrom: string | null; manualRequiresJustification: boolean; rowVersion: number }
+
+/** How a workstation tells a keyboard-wedge (HID) reader from a person typing. */
+export interface ScanConfig { maxKeyIntervalMs: number; minLength: number; terminator: 'enter' | 'tab' | 'nenhum' }
+export const DEFAULT_SCAN_CONFIG: ScanConfig = { maxKeyIntervalMs: 35, minLength: 6, terminator: 'enter' };
+
+export interface StationDeviceDto { id: string; label: string; pairedBy: string; pairedAt: string; lastSeenAt: string | null; revoked: boolean }
+export interface StationDto {
+  id: string; sectorId: string; name: string; location: string | null; steps: ProcessStep[]; inputMethods: InputMethod[]; symbologies: Symbology[];
+  deviceLabel: string | null; responsibleUserId: string | null; responsibleName: string | null; requirePairing: boolean; scanConfig: ScanConfig; enabled: boolean;
+  lastSeenAt: string | null; devices: StationDeviceDto[]; rowVersion: number;
+}
+
+export interface AssetDto {
+  id: string; code: string; setId: string; setName: string; tag: string | null; status: 'ativo' | 'manutencao' | 'baixado'; statusReason: string | null;
+  openProcess: { id: string; step: ProcessStep; state: ProcessState } | null; rowVersion: number;
+}
+
+export interface ProcessSummaryDto {
+  id: string; code: string; assetCode: string | null; description: string; setName: string | null; currentStep: ProcessStep; state: ProcessState; nextSteps: ProcessStep[];
+  packageLabel: string | null; loadId: string | null; loadCode: string | null; loadStatus: LoadStatus | null; destinationSectorId: string | null;
+  openedAt: string; closedAt: string | null; legacy: boolean; origin: DataOrigin;
+}
+
+export interface ScanEventDto {
+  id: string; rawCode: string; codeKind: string; inputMethod: InputMethod; step: ProcessStep; operation: string; outcome: string | null; result: ScanResult; message: string;
+  userName: string; stationId: string | null; stationName: string | null; device: string | null; serverAt: string; deviceAt: string | null;
+  originSectorId: string | null; destinationSectorId: string | null; justification: string | null; processId: string | null; loadId: string | null; loadCode: string | null;
+}
+
+export interface ProcessDetail extends ProcessSummaryDto { events: ScanEventDto[]; previousProcessId: string | null; nextProcessId: string | null }
+
+export interface ScanResponse {
+  eventId: string; result: ScanResult; message: string;
+  /** The same reading had already been recorded (sent twice): nothing was applied again. */
+  replay: boolean;
+  process: ProcessSummaryDto | null;
+  load: { id: string; code: string; packages: number } | null;
 }

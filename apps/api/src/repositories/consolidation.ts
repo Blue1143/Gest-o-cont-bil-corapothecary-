@@ -141,7 +141,8 @@ async function loadCmeFacts(db: Db, institutionId: string, months: string[], fro
   const replaced = new Set((tests.length ? await db.selectFrom('sterilization_test').select('replaces_id').where('replaces_id', 'in', tests.map((t) => t.id)).execute() : []).map((r) => r.replaces_id));
   return consolidateCmeFacts({
     months,
-    loads: loads.map((l) => ({ date: dateInZone(l.started_at, tz), sectorId: l.sector_id, physical: l.physical_result, status: l.status, everRetained: !!l.retained })),
+    // Filtered by start, so loads still in assembly never reach here.
+    loads: loads.map((l) => ({ date: dateInZone(l.started_at!, tz), sectorId: l.sector_id, physical: l.physical_result, status: l.status, everRetained: !!l.retained })),
     tests: tests.filter((t) => !replaced.has(t.id)).map((t) => ({ date: t.performed_on, sectorId: t.sector_id, type: t.type, result: t.result })),
     setUses: uses.map((u) => ({ date: dateInZone(u.used_at, tz), sectorId: u.sector_id, traced: !!u.surgery_id })),
     nonconformities: ncs.flatMap((n) => {

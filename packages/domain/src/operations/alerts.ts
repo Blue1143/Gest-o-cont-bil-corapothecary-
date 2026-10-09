@@ -10,7 +10,7 @@ import type { StockEvaluation } from '../rules/operations';
 export type AlertKind =
   | 'iras_investigacao_atrasada' | 'dispositivo_prolongado' | 'mdr_novo' | 'treinamento_vencido'
   | 'insumo_critico' | 'plano_acao_atrasado' | 'isc_contato_pendente'
-  | 'cme_carga_recolhida' | 'cme_liberada_com_falha' | 'cme_bowie_dick_reprovado' | 'cme_ib_leitura_atrasada' | 'cme_qualificacao';
+  | 'cme_carga_recolhida' | 'cme_uso_sem_saida' | 'cme_liberada_com_falha' | 'cme_bowie_dick_reprovado' | 'cme_ib_leitura_atrasada' | 'cme_qualificacao';
 
 export type AlertPriority = 'alta' | 'media' | 'baixa';
 export type AlertStatus = 'aberto' | 'assumido' | 'encerrado';
@@ -25,6 +25,7 @@ export const ALERT_KIND_LABEL: Record<AlertKind, string> = {
   isc_contato_pendente: 'Vigilância pós-alta de ISC sem contato',
   cme_carga_recolhida: 'Carga da CME recolhida após uso',
   cme_liberada_com_falha: 'Carga liberada com teste reprovado',
+  cme_uso_sem_saida: 'Pacote usado sem saída registrada do CME',
   cme_bowie_dick_reprovado: 'Bowie-Dick reprovado com equipamento em uso',
   cme_ib_leitura_atrasada: 'Indicador biológico sem leitura no prazo',
   cme_qualificacao: 'Qualificação de equipamento da CME',
@@ -36,7 +37,7 @@ export const ALERT_STATUS_LABEL: Record<AlertStatus, string> = { aberto: 'Aberto
 export const ALERT_KIND_PERMISSION: Record<AlertKind, Permission> = {
   iras_investigacao_atrasada: 'iras:view', dispositivo_prolongado: 'patient:view', mdr_novo: 'micro:view', treinamento_vencido: 'quality:view',
   insumo_critico: 'quality:view', plano_acao_atrasado: 'quality:view', isc_contato_pendente: 'surgery:view',
-  cme_carga_recolhida: 'cme:view', cme_liberada_com_falha: 'cme:view', cme_bowie_dick_reprovado: 'cme:view', cme_ib_leitura_atrasada: 'cme:view', cme_qualificacao: 'cme:view',
+  cme_carga_recolhida: 'cme:view', cme_liberada_com_falha: 'cme:view', cme_uso_sem_saida: 'cme:view', cme_bowie_dick_reprovado: 'cme:view', cme_ib_leitura_atrasada: 'cme:view', cme_qualificacao: 'cme:view',
 };
 
 export interface AlertCandidate {
@@ -77,6 +78,8 @@ export interface AlertInput {
   cme?: {
     /** Loads recalled (rejected after release) in the last days, with the exposure found. */
     recalledLoads: Array<{ loadId: string; code: string; surgeries: number; patients: number; sectorId: string }>;
+    /** Packages used (surgery or sector) although the flow has no registered exit (transition period). */
+    usesWithoutExit?: Array<{ useId: string; labelCode: string; processId: string; usedOn: IsoDate; sectorId: string }>;
     /** Released loads whose current tests now fail the policy (e.g. a positive IB read later). */
     releasedWithFailure: Array<{ loadId: string; code: string; reason: string; sectorId: string }>;
     /** Sterilizers still in use whose latest Bowie-Dick of the day failed. */
@@ -123,6 +126,9 @@ export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
     for (const l of input.cme.recalledLoads) {
       const exposure = l.surgeries ? `${l.patients} paciente(s) em ${l.surgeries} cirurgia(s) receberam material da carga: avaliar com a CCIH a necessidade de vigilância.` : 'Nenhum material desta carga foi registrado em uso.';
       out.push({ kind: 'cme_carga_recolhida', oneShot: true, dedupKey: `recolhe:${l.loadId}`, priority: l.surgeries ? 'alta' : 'media', title: `Carga ${l.code} recolhida`, detail: exposure, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });
+    }
+    for (const u of input.cme.usesWithoutExit ?? []) {
+      out.push({ kind: 'cme_uso_sem_saida', oneShot: true, dedupKey: `semsaida:${u.useId}`, priority: 'media', title: `Pacote ${u.labelCode} usado sem saída do CME`, detail: `Uso em ${u.usedOn.split('-').reverse().join('/')}. Registre a distribuição na expedição para manter a trilha completa.`, entity: 'cme_process', entityId: u.processId, sectorId: u.sectorId, link: `/cme/processos/${u.processId}` });
     }
     for (const l of input.cme.releasedWithFailure) {
       out.push({ kind: 'cme_liberada_com_falha', dedupKey: `falha:${l.loadId}`, priority: 'alta', title: `Carga ${l.code} liberada com teste reprovado`, detail: `${l.reason} Avaliar o recolhimento dos pacotes e a exposição de pacientes.`, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });

@@ -21,6 +21,7 @@ import { trainingSupplyRoutes } from './routes/training-supplies';
 import { alertRoutes } from './routes/alerts';
 import { attachmentRoutes } from './routes/attachments';
 import { cmeRoutes } from './routes/cme';
+import { cmeFlowRoutes } from './routes/cme-flow';
 
 export interface AppOptions {
   db: Kysely<DB>;
@@ -92,6 +93,7 @@ export async function buildApp({ db, env, logger = true }: AppOptions): Promise<
       await api.register(alertRoutes, { db });
       await api.register(attachmentRoutes, { db, env });
       await api.register(cmeRoutes, { db });
+      await api.register(cmeFlowRoutes, { db, env });
     },
     { prefix: '/api' },
   );
