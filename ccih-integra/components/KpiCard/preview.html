@@ -1,0 +1,21 @@
+<!-- @dsCard group="Indicadores" height=200 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>KpiCard — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'ig-grid' },
+  h(I.KpiCard, { label: 'Densidade IPCS', unit: '‰ CVC-dia', value: 2.4, target: 2.0, previous: 1.8, previousLabel: 'vs ago', spark: [3.1, 2.6, 2.2, 2.9, 2.0, 1.7, 2.3, 1.9, 2.1, 1.8, 2.4] }),
+  h(I.KpiCard, { label: 'Adesão higiene das mãos', unit: '%', decimals: 0, value: 78, target: 80, direction: 'higher', previous: 74, previousLabel: 'vs ago', spark: [65, 68, 70, 69, 72, 71, 74, 76, 74, 78] }),
+  h(I.KpiCard, { label: 'Consumo de preparação alcoólica', unit: 'mL/pac-dia', decimals: 0, value: 24, target: 20, direction: 'higher', previous: 22, previousLabel: 'vs ago' })));
+</script>
+</body>
+</html>

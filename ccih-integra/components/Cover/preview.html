@@ -1,0 +1,63 @@
+<!-- @dsCard height=320 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>CCIH Integra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--surface); color: var(--ink); font-family: var(--font-sans); overflow: hidden; }
+  .cover { position: relative; width: 960px; height: 320px; overflow: hidden; }
+  .art { position: absolute; top: 0; left: 480px; width: 480px; height: 320px; overflow: hidden; }
+  .art svg { display: block; width: 480px; height: 320px; }
+  .tint { fill: var(--primary-soft); }
+  .brand { fill: var(--primary); }
+  .deep { fill: var(--ink); }
+  .s1 { fill: var(--serie-1); }
+  .s2 { fill: var(--serie-2); }
+  .blk { rx: var(--radius-lg); }
+  .bar { rx: var(--radius-sm); }
+  .plus { stroke: var(--primary); stroke-width: 2; stroke-linecap: round; fill: none; }
+  .plus.cut { stroke: var(--primary-soft); }
+  .words { position: absolute; left: var(--space-6); bottom: var(--space-6); max-width: 440px; }
+  .name { margin: 0; font-size: 96px; line-height: .95; font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
+  .tag { margin: var(--space-3) 0 0 4px; font-size: 14px; line-height: 20px; color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 320" width="480" height="320">
+<!--
+  blocks      primary-soft 168×272 (the tint, carrying the pattern) · primary 152×256 bled off the top (the identity, tallest) · ink 144×224 bled off the right edge · serie-2 and serie-1 as two short bars (the surveillance series: PAV, IPCS) — five colours, ≈40% of 960×320
+  arrangement one tall primary slab between a tinted panel and a dark slab, bottoms on one line space-6 above the edge, space-4 gutters; two data bars on the ground under the slab like the BarChart rows
+  pattern     a plus grid, from "precise, clinical, data-dense": 8px pluses at a space-6 pitch in primary over the tint, three cut out of the dark slab — the cross of care set on the measuring grid
+  scales      sides in space-2 multiples; gutters space-4; pitch space-6; block corners radius-lg; bars radius-sm, space-2 tall
+-->
+<rect class="tint blk" x="0" y="24" width="168" height="272" rx="10"/>
+<rect class="brand blk" x="184" y="-16" width="152" height="248" rx="10"/>
+<rect class="deep blk" x="352" y="72" width="144" height="224" rx="10"/>
+<rect class="s2 bar" x="184" y="256" width="120" height="8" rx="4"/>
+<rect class="s1 bar" x="184" y="280" width="80" height="8" rx="4"/>
+<g class="plus">
+<path d="M24 52v8M20 56h8"/><path d="M48 52v8M44 56h8"/><path d="M72 52v8M68 56h8"/><path d="M96 52v8M92 56h8"/><path d="M120 52v8M116 56h8"/><path d="M144 52v8M140 56h8"/>
+<path d="M24 76v8M20 80h8"/><path d="M48 76v8M44 80h8"/><path d="M72 76v8M68 80h8"/><path d="M96 76v8M92 80h8"/><path d="M120 76v8M116 80h8"/>
+<path d="M24 100v8M20 104h8"/><path d="M48 100v8M44 104h8"/><path d="M72 100v8M68 104h8"/><path d="M96 100v8M92 104h8"/>
+<path d="M24 124v8M20 128h8"/><path d="M48 124v8M44 128h8"/><path d="M72 124v8M68 128h8"/>
+<path d="M24 148v8M20 152h8"/><path d="M48 148v8M44 152h8"/>
+<path d="M24 172v8M20 176h8"/>
+</g>
+<g class="plus cut">
+<path d="M376 100v8M372 104h8"/><path d="M400 100v8M396 104h8"/><path d="M376 124v8M372 128h8"/>
+</g>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">CCIH<br>Integra</h1>
+<p class="tag">Vigilância de infecções, indicadores e rastreabilidade num só sistema.</p>
+</div>
+</div>
+</body>
+</html>

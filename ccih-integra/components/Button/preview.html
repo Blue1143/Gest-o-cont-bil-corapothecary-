@@ -1,0 +1,23 @@
+<!-- @dsCard group="Ações" height=64 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Button — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'ig-row' },
+  h(I.Button, { variant: 'primary' }, 'Notificar IRAS'),
+  h(I.Button, null, 'Exportar relatório'),
+  h(I.Button, { variant: 'ghost', icon: 'table' }, 'Ver tabela'),
+  h(I.Button, { variant: 'danger' }, 'Recolher lote'),
+  h(I.Button, { size: 'sm' }, 'Filtrar')));
+</script>
+</body>
+</html>

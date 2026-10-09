@@ -1,0 +1,28 @@
+<!-- @dsCard group="Gestão" height=430 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>BundleChecklist — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.BundleChecklist, {
+  title: 'Bundle de inserção de cateter venoso central', setor: 'UTI Adulto · leito 07', data: '2026-09-29', auditor: 'Enf. CCIH L. Prado',
+  itens: [
+    { texto: 'Higiene das mãos antes do procedimento', resposta: 'sim' },
+    { texto: 'Precaução de barreira máxima (gorro, máscara, avental e luvas estéreis, campo amplo)', resposta: 'sim' },
+    { texto: 'Antissepsia da pele com clorexidina alcoólica > 0,5% e tempo de secagem respeitado', resposta: 'sim' },
+    { texto: 'Sítio preferencial avaliado (evitar femoral em adultos)', resposta: 'sim' },
+    { texto: 'Uso de ultrassom para punção', resposta: 'na' },
+    { texto: 'Curativo estéril e data de inserção registrados', resposta: null }
+  ]
+}));
+</script>
+</body>
+</html>

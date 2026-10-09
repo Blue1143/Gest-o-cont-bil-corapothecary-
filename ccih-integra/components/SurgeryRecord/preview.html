@@ -1,0 +1,29 @@
+<!-- @dsCard group="Registros" height=560 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>SurgeryRecord — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.SurgeryRecord, {
+  procedimento: 'Artroplastia total de quadril D', codigo: 'CIR-2026-03187',
+  paciente: { iniciais: 'J. R. P.', prontuario: 'PRT-0051177' },
+  data: '2026-10-02', sala: 'Sala 4', especialidade: 'Ortopedia',
+  potencial: 'limpa', asa: 3, duracaoMin: 185, p75Min: 150, implante: true,
+  profilaxia: { antimicrobiano: 'Cefazolina', dose: '2 g IV', minutosAntesIncisao: 35, duracaoHoras: 24, repique: true },
+  caixas: [
+    { codigo: 'CX-ORT-012', descricao: 'Caixa de artroplastia de quadril', lote: 'LT-2610-01', ciclo: 'A1-0412' },
+    { codigo: 'CX-BAS-044', descricao: 'Caixa básica de ortopedia', lote: 'LT-2610-01', ciclo: 'A1-0412' },
+    { codigo: 'IMP-77810', descricao: 'Prótese femoral cimentada (consignado)', lote: 'LT-2609-29', ciclo: 'A2-0388' }
+  ]
+}));
+</script>
+</body>
+</html>

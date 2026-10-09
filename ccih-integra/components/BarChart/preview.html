@@ -1,0 +1,29 @@
+<!-- @dsCard group="Gráficos" height=330 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>BarChart — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.BarChart, {
+  title: 'Taxa de ISC por especialidade — cirurgias limpas',
+  subtitle: 'ISC por 100 cirurgias limpas · jan–set/26', unit: '%', target: 1.5, targetLabel: 'Meta 1,5%',
+  categoryLabel: 'Especialidade', valueLabel: 'Taxa de ISC (%)',
+  data: [
+    { label: 'Ortopedia (artroplastias)', value: 2.3, type: 'ISC', note: '6 ISC em 261 cirurgias' },
+    { label: 'Cardíaca', value: 1.9, type: 'ISC', note: '3 ISC em 158 cirurgias' },
+    { label: 'Neurocirurgia', value: 1.2, type: 'ISC', note: '2 ISC em 167 cirurgias' },
+    { label: 'Cirurgia geral (hérnias)', value: 0.8, type: 'ISC', note: '3 ISC em 372 cirurgias' },
+    { label: 'Mastologia', value: 0.6, type: 'ISC', note: '1 ISC em 164 cirurgias' }
+  ]
+}));
+</script>
+</body>
+</html>

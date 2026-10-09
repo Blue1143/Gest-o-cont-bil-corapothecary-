@@ -1,0 +1,27 @@
+<!-- @dsCard group="Gestão" height=330 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>SupplyStock — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.SupplyStock, {
+  title: 'Insumos de prevenção — almoxarifado central', dataRef: '2026-10-09',
+  itens: [
+    { insumo: 'Preparação alcoólica gel 70%', unidade: 'L', estoque: 180, consumoDia: 9.5, minimoDias: 20, lote: 'AG-5521', validade: '2027-06-30' },
+    { insumo: 'Clorexidina alcoólica 0,5%', unidade: 'L', estoque: 24, consumoDia: 2.2, minimoDias: 20, lote: 'CX-1180', validade: '2026-10-31' },
+    { insumo: 'Máscara N95 / PFF2', unidade: 'un', estoque: 340, consumoDia: 60, minimoDias: 15, lote: 'N9-0921', validade: '2028-01-31' },
+    { insumo: 'Avental descartável', unidade: 'un', estoque: 1900, consumoDia: 120, minimoDias: 15, lote: 'AV-3302', validade: '2029-05-31' },
+    { insumo: 'Indicador biológico (vapor)', unidade: 'un', estoque: 30, consumoDia: 3, minimoDias: 30, lote: 'IB-7745', validade: '2026-12-15' }
+  ]
+}));
+</script>
+</body>
+</html>

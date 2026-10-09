@@ -1,0 +1,29 @@
+<!-- @dsCard group="Rastreabilidade" height=470 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>SterilizationCycle — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.SterilizationCycle, {
+  equipamento: 'Autoclave A2 — pré-vácuo', ciclo: 'A2-0391', data: '2026-10-09T08:12', metodo: 'Vapor saturado sob pressão',
+  parametros: [{ nome: 'Temperatura', valor: '134 °C' }, { nome: 'Exposição', valor: '5 min' }, { nome: 'Pressão', valor: '2,1 kgf/cm²' }, { nome: 'Secagem', valor: '20 min' }],
+  testes: [
+    { tipo: 'Bowie-Dick', detalhe: 'Primeiro ciclo do dia, câmara vazia', resultado: 'aprovado' },
+    { tipo: 'Indicador químico classe 5', detalhe: 'Integrador em cada pacote', resultado: 'aprovado' },
+    { tipo: 'Indicador biológico', detalhe: 'G. stearothermophilus · leitura 24 h', resultado: 'pendente' },
+    { tipo: 'Registro físico do ciclo', detalhe: 'Impressão do equipamento anexada', resultado: 'aprovado' }
+  ],
+  itens: 38, implantavel: true, operador: 'Téc. R. Lima',
+  actions: h(I.Button, { size: 'sm' }, 'Imprimir etiquetas')
+}));
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!-- @dsCard group="Dados" height=300 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>DataTable — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+var tipos = { IPCS: 1, PAV: 1 };
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.DataTable, {
+  caption: 'Indicadores de dispositivo por setor — setembro/26',
+  initialSort: { key: 'di', dir: 'desc' },
+  columns: [
+    { key: 'setor', label: 'Setor' },
+    { key: 'tipo', label: 'IRAS', render: function (r) { return h(I.InfectionTag, { type: r.tipo }); } },
+    { key: 'casos', label: 'Casos', align: 'right' },
+    { key: 'dispdia', label: 'Dispositivo-dia', align: 'right', format: function (v) { return I.format.number(v); } },
+    { key: 'di', label: 'DI ‰', align: 'right', format: function (v) { return I.format.number(v, 1); } },
+    { key: 'st', label: 'Situação', render: function (r) { return h(I.StatusBadge, { status: I.statusFor(r.di, r.meta) }); }, sortValue: function (r) { return r.di / r.meta; } }
+  ],
+  rows: [
+    { setor: 'UTI Adulto', tipo: 'IPCS', casos: 3, dispdia: 1248, di: 2.4, meta: 2.0 },
+    { setor: 'UTI Adulto', tipo: 'PAV', casos: 5, dispdia: 862, di: 5.8, meta: 7.0 },
+    { setor: 'UTI Neonatal', tipo: 'IPCS', casos: 2, dispdia: 540, di: 3.7, meta: 4.0 },
+    { setor: 'UTI Coronariana', tipo: 'ITU-AC', casos: 1, dispdia: 410, di: 2.4, meta: 2.0 },
+    { setor: 'Clínica Médica', tipo: 'ITU-AC', casos: 2, dispdia: 380, di: 5.3, meta: 3.0 }
+  ]
+}));
+</script>
+</body>
+</html>

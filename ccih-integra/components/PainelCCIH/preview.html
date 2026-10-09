@@ -1,0 +1,93 @@
+<!-- @dsCard group="Páginas" height=2600 page subtitle="Painel integrado de vigilância — composição de referência" -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Painel CCIH — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+var meses = ['out/25','nov/25','dez/25','jan/26','fev/26','mar/26','abr/26','mai/26','jun/26','jul/26','ago/26','set/26'];
+function Painel() {
+  return h('main', { className: 'ig-page' },
+    h('header', { className: 'ig-page-head' },
+      h('div', null,
+        h('span', { className: 'ig-label' }, 'Comissão de Controle de Infecção Hospitalar'),
+        h('h1', { className: 'ig-page-title' }, 'Painel CCIH — setembro/26'),
+        h('p', { className: 'ig-card-sub' }, 'Vigilância ativa · dados consolidados em 09/10/2026 às 07:40')),
+      h('div', { className: 'ig-row' },
+        h(I.Button, null, 'Período: últimos 12 meses'),
+        h(I.Button, null, 'Setor: todos'),
+        h(I.Button, { variant: 'primary' }, 'Exportar relatório ANVISA'))),
+    h(I.AlertBanner, { tone: 'crit', title: 'Possível surto: 3 casos de K. pneumoniae KPC na UTI Adulto em 9 dias',
+      actions: [h(I.Button, { key: 1, size: 'sm', variant: 'primary' }, 'Abrir investigação'), h(I.Button, { key: 2, size: 'sm' }, 'Ver casos')] },
+      'Precaução de contato instituída nos leitos 4, 7 e 9. Swab de vigilância dos contactantes pendente.'),
+    h('section', { className: 'ig-grid', 'aria-label': 'Indicadores principais' },
+      h(I.KpiCard, { label: 'Densidade IPCS · UTI', unit: '‰', value: 2.4, target: 2.0, previous: 1.8, previousLabel: 'vs ago', spark: [3.1, 2.8, 2.6, 2.2, 2.9, 2.0, 1.7, 2.3, 1.9, 2.1, 1.8, 2.4] }),
+      h(I.KpiCard, { label: 'Densidade PAV · UTI', unit: '‰', value: 5.8, target: 7.0, previous: 5.4, previousLabel: 'vs ago', spark: [8.4, 9.1, 7.6, 7.9, 6.8, 7.2, 6.1, 6.6, 5.9, 6.3, 5.4, 5.8] }),
+      h(I.KpiCard, { label: 'Densidade ITU-AC · UTI', unit: '‰', value: 2.0, target: 2.5, previous: 2.1, previousLabel: 'vs ago', spark: [3.6, 3.2, 3.9, 2.8, 2.5, 3.0, 2.2, 2.6, 2.4, 1.9, 2.1, 2.0] }),
+      h(I.KpiCard, { label: 'ISC em cirurgia limpa', unit: '%', value: 1.3, target: 1.5, previous: 1.6, previousLabel: 'vs ago' }),
+      h(I.KpiCard, { label: 'Adesão à higiene das mãos', unit: '%', decimals: 0, value: 78, target: 80, direction: 'higher', previous: 74, previousLabel: 'vs ago' }),
+      h(I.KpiCard, { label: 'Profilaxia cirúrgica conforme', unit: '%', decimals: 0, value: 91, target: 95, direction: 'higher', previous: 93, previousLabel: 'vs ago' })),
+    h('section', { className: 'ig-cols' },
+      h(I.TrendChart, { title: 'Densidade de incidência — UTI Adulto', subtitle: 'Casos por 1.000 dispositivos-dia', unit: '‰', labels: meses,
+        series: [
+          { name: 'IPCS', color: 'iras-ipcs', values: [3.1, 2.8, 2.6, 2.2, 2.9, 2.0, 1.7, 2.3, 1.9, 2.1, 1.8, 2.4] },
+          { name: 'PAV', color: 'iras-pav', values: [8.4, 9.1, 7.6, 7.9, 6.8, 7.2, 6.1, 6.6, 5.9, 6.3, 5.4, 5.8] },
+          { name: 'ITU-AC', color: 'iras-itu', values: [3.6, 3.2, 3.9, 2.8, 2.5, 3.0, 2.2, 2.6, 2.4, 1.9, 2.1, 2.0] }] }),
+      h(I.BarChart, { title: 'IRAS notificadas por tipo', subtitle: 'Casos confirmados · jan–set/26 · todos os setores', decimals: 0, categoryLabel: 'Tipo', valueLabel: 'Casos',
+        data: [
+          { label: 'Pneumonia', value: 41, type: 'PAV' },
+          { label: 'Corrente sanguínea', value: 27, type: 'IPCS' },
+          { label: 'Sítio cirúrgico', value: 19, type: 'ISC' },
+          { label: 'Trato urinário', value: 16, type: 'ITU-AC' },
+          { label: 'Outras', value: 9, type: 'OUTRA' }] })),
+    h('section', { className: 'ig-cols' },
+      h(I.TrendChart, { title: 'Consumo de preparação alcoólica', subtitle: 'mL por paciente-dia · todas as unidades', unit: 'mL', decimals: 0, labels: meses, target: 20, targetLabel: 'Meta mínima',
+        series: [{ name: 'Consumo', color: 'primary', values: [14, 15, 15, 17, 16, 18, 19, 18, 21, 22, 22, 24] }] }),
+      h(I.TrainingProgress, { title: 'Cobertura de treinamentos', meta: 90, itens: [
+        { tema: 'Higiene das mãos', publico: 'Toda a assistência', concluidos: 412, total: 438 },
+        { tema: 'Bundle de CVC', publico: 'UTIs', concluidos: 58, total: 71 },
+        { tema: 'Precauções e isolamento', publico: 'Enfermagem', concluidos: 190, total: 240 },
+        { tema: 'Processamento na CME', publico: 'CME', concluidos: 22, total: 22 }] })),
+    h(I.DataTable, { caption: 'Notificações recentes de IRAS', initialSort: { key: 'data', dir: 'desc' },
+      columns: [
+        { key: 'data', label: 'Data do evento', format: function (v) { return I.format.date(v); } },
+        { key: 'paciente', label: 'Paciente', render: function (r) { return h('span', null, r.iniciais, ' ', h('span', { className: 'ig-mono ig-muted' }, r.prontuario)); } },
+        { key: 'setor', label: 'Setor' },
+        { key: 'tipo', label: 'IRAS', render: function (r) { return h(I.InfectionTag, { type: r.tipo }); } },
+        { key: 'agente', label: 'Agente', render: function (r) { return r.agente ? h('i', null, r.agente) : '—'; } },
+        { key: 'status', label: 'Status', render: function (r) { return h(I.StatusBadge, { status: r.status === 'confirmada' ? 'crit' : 'warn' }, r.status === 'confirmada' ? 'Confirmada' : 'Em investigação'); } }],
+      rows: [
+        { id: 1, data: '2026-10-07', iniciais: 'M. A. S.', prontuario: 'PRT-0048213', setor: 'UTI Adulto', tipo: 'PAV', agente: null, status: 'investigacao' },
+        { id: 2, data: '2026-10-06', iniciais: 'M. A. S.', prontuario: 'PRT-0048213', setor: 'UTI Adulto', tipo: 'IPCS', agente: 'Klebsiella pneumoniae (KPC)', status: 'confirmada' },
+        { id: 3, data: '2026-10-03', iniciais: 'J. R. P.', prontuario: 'PRT-0051177', setor: 'Ortopedia', tipo: 'ISC', agente: 'Staphylococcus aureus (MSSA)', status: 'confirmada' },
+        { id: 4, data: '2026-09-30', iniciais: 'A. C. L.', prontuario: 'PRT-0049906', setor: 'UTI Adulto', tipo: 'IPCS', agente: 'Klebsiella pneumoniae (KPC)', status: 'confirmada' },
+        { id: 5, data: '2026-09-27', iniciais: 'R. T. F.', prontuario: 'PRT-0050342', setor: 'Clínica Médica', tipo: 'ITU-AC', agente: 'Escherichia coli', status: 'confirmada' }] }),
+    h('section', { className: 'ig-cols' },
+      h(I.SterilizationCycle, { equipamento: 'Autoclave A2 — pré-vácuo', ciclo: 'A2-0391', data: '2026-10-09T08:12', metodo: 'Vapor saturado sob pressão',
+        testes: [
+          { tipo: 'Bowie-Dick', resultado: 'aprovado' },
+          { tipo: 'Indicador químico classe 5', resultado: 'aprovado' },
+          { tipo: 'Indicador biológico', detalhe: 'Leitura 24 h', resultado: 'pendente' }],
+        itens: 38, implantavel: true }),
+      h(I.BundleChecklist, { title: 'Auditoria — bundle de prevenção de PAV', setor: 'UTI Adulto · leito 07', data: '2026-10-08', auditor: 'Enf. CCIH L. Prado', editable: false,
+        itens: [
+          { texto: 'Cabeceira elevada entre 30° e 45°', resposta: 'sim' },
+          { texto: 'Interrupção diária da sedação avaliada', resposta: 'sim' },
+          { texto: 'Higiene oral com escovação', resposta: 'nao' },
+          { texto: 'Pressão do cuff entre 20 e 30 cmH2O', resposta: 'sim' }] })),
+    h(I.SupplyStock, { title: 'Insumos críticos', dataRef: '2026-10-09', itens: [
+      { insumo: 'Preparação alcoólica 70%', unidade: 'L', estoque: 180, consumoDia: 9.5, minimoDias: 20, lote: 'AG-5521', validade: '2027-06-30' },
+      { insumo: 'Clorexidina alcoólica 0,5%', unidade: 'L', estoque: 24, consumoDia: 2.2, minimoDias: 20, lote: 'CX-1180', validade: '2026-10-31' },
+      { insumo: 'Indicador biológico (vapor)', unidade: 'un', estoque: 30, consumoDia: 3, minimoDias: 30, lote: 'IB-7745', validade: '2026-12-15' }] }));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(Painel));
+</script>
+</body>
+</html>

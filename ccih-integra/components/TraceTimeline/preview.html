@@ -1,0 +1,29 @@
+<!-- @dsCard group="Rastreabilidade" height=560 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>TraceTimeline — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.TraceTimeline, {
+  item: { codigo: 'CX-ORT-012', descricao: 'Caixa de artroplastia de quadril', lote: 'LT-2610-01' },
+  etapas: [
+    { etapa: 'Recepção no expurgo', data: '2026-09-30T14:20', responsavel: 'A. Souza', status: 'ok', detalhe: 'Conferência de 64 peças' },
+    { etapa: 'Limpeza automatizada', data: '2026-09-30T15:05', responsavel: 'A. Souza', status: 'ok', detalhe: 'Termodesinfectora T1 · teste de limpeza aprovado' },
+    { etapa: 'Inspeção e preparo', data: '2026-09-30T17:40', responsavel: 'C. Melo', status: 'warn', detalhe: '1 pinça com ponto de oxidação — substituída' },
+    { etapa: 'Esterilização', data: '2026-10-01T07:30', responsavel: 'R. Lima', status: 'ok', detalhe: 'Ciclo A1-0412 · IB negativo' },
+    { etapa: 'Armazenamento', data: '2026-10-01T09:00', responsavel: 'R. Lima', status: 'ok', detalhe: 'Arsenal estéril, prateleira B3' },
+    { etapa: 'Distribuição ao centro cirúrgico', data: '2026-10-02T06:50', responsavel: 'P. Nunes', status: 'ok' },
+    { etapa: 'Uso no paciente', data: '2026-10-02T07:40', status: 'ok', detalhe: 'CIR-2026-03187 · PRT-0051177' }
+  ]
+}));
+</script>
+</body>
+</html>

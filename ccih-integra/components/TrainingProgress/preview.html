@@ -1,0 +1,27 @@
+<!-- @dsCard group="Gestão" height=330 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>TrainingProgress — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.TrainingProgress, {
+  title: 'Treinamentos obrigatórios — 2º semestre', meta: 90,
+  itens: [
+    { tema: 'Higiene das mãos (5 momentos)', publico: 'Toda a assistência', concluidos: 412, total: 438, proximaReciclagem: '2027-03-01' },
+    { tema: 'Bundle de inserção de CVC', publico: 'Médicos e enfermeiros de UTI', concluidos: 58, total: 71 },
+    { tema: 'Precauções e isolamento', publico: 'Enfermagem e higienização', concluidos: 190, total: 240 },
+    { tema: 'Processamento de produtos (CME)', publico: 'Equipe da CME', concluidos: 22, total: 22 },
+    { tema: 'Prevenção de PAV', publico: 'Fisioterapia e enfermagem UTI', concluidos: 31, total: 54 }
+  ]
+}));
+</script>
+</body>
+</html>

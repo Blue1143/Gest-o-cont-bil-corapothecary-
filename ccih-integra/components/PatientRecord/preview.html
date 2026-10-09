@@ -1,0 +1,37 @@
+<!-- @dsCard group="Registros" height=620 -->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>PatientRecord — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{background:var(--surface);} #root{padding:var(--space-4);}</style>
+</head>
+<body>
+<div id="root" class="ig-root"></div>
+<script>
+var I = window.Integra, h = React.createElement;
+ReactDOM.createRoot(document.getElementById('root')).render(h(I.PatientRecord, {
+  paciente: { iniciais: 'M. A. S.', prontuario: 'PRT-0048213', idade: 67, sexo: 'F' },
+  setor: 'UTI Adulto', leito: '07', admissao: '2026-09-28', dataRef: '2026-10-09', precaucao: 'contato',
+  dispositivos: [
+    { tipo: 'CVC', sitio: 'jugular D', inicio: '2026-09-29' },
+    { tipo: 'VM', inicio: '2026-09-28' },
+    { tipo: 'SVD', inicio: '2026-10-08' },
+    { tipo: 'PAI', sitio: 'radial E', inicio: '2026-09-29', retirada: '2026-10-03' }
+  ],
+  culturas: [
+    { material: 'Hemocultura (2 pares)', coleta: '2026-10-06', resultado: 'positiva', microrganismo: 'Klebsiella pneumoniae', perfil: 'KPC' },
+    { material: 'Aspirado traqueal quantitativo', coleta: '2026-10-06', resultado: 'pendente' },
+    { material: 'Swab retal de vigilância', coleta: '2026-09-28', resultado: 'negativa' }
+  ],
+  iras: [
+    { tipo: 'IPCS', dataEvento: '2026-10-06', criterio: 'IPCS laboratorial — patógeno em 1 hemocultura, CVC D8', status: 'confirmada' },
+    { tipo: 'PAV', dataEvento: '2026-10-07', criterio: 'Aguardando imagem e cultura', status: 'em investigação' }
+  ],
+  footer: [h(I.Button, { key: 1, variant: 'primary', size: 'sm' }, 'Notificar IRAS'), h(I.Button, { key: 2, size: 'sm' }, 'Abrir prontuário completo')]
+}));
+</script>
+</body>
+</html>
