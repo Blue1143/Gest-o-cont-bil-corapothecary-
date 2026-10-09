@@ -19,6 +19,16 @@ const ReferencesPage = named(() => import('../features/admin/ReferencesPage'), '
 const CmePolicyPage = named(() => import('../features/admin/CmePolicyPage'), 'CmePolicyPage');
 const UsersPage = named(() => import('../features/admin/UsersPage'), 'UsersPage');
 const AuditPage = named(() => import('../features/admin/AuditPage'), 'AuditPage');
+const OrgPage = named(() => import('../features/admin/OrgPage'), 'OrgPage');
+const PatientsPage = named(() => import('../features/clinical/PatientsPage'), 'PatientsPage');
+const PatientDetailPage = named(() => import('../features/clinical/PatientDetailPage'), 'PatientDetailPage');
+const IrasListPage = named(() => import('../features/clinical/IrasPages'), 'IrasListPage');
+const IrasCasePage = named(() => import('../features/clinical/IrasPages'), 'IrasCasePage');
+const SurgeriesPage = named(() => import('../features/clinical/SurgeryPages'), 'SurgeriesPage');
+const SurgeryPage = named(() => import('../features/clinical/SurgeryPages'), 'SurgeryPage');
+const CulturesPage = named(() => import('../features/clinical/MicroPages'), 'CulturesPage');
+const CulturePage = named(() => import('../features/clinical/MicroPages'), 'CulturePage');
+const CensusPage = named(() => import('../features/clinical/CensusPage'), 'CensusPage');
 
 const page = (el: ReactElement) => <Suspense fallback={<div className="page"><LoadingState /></div>}>{el}</Suspense>;
 const guarded = (anyOf: Permission[], el: ReactElement) => <Guard anyOf={anyOf}>{page(el)}</Guard>;
@@ -31,6 +41,15 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomeRoute dashboard={<DashboardPage />} /> },
       { path: 'indicadores', element: guarded(['indicators:view'], <IndicatorsPage />) },
+      { path: 'pacientes', element: guarded(['patient:view'], <PatientsPage />) },
+      { path: 'pacientes/:id', element: guarded(['patient:view'], <PatientDetailPage />) },
+      { path: 'vigilancia', element: guarded(['iras:view'], <IrasListPage />) },
+      { path: 'vigilancia/:id', element: guarded(['iras:view'], <IrasCasePage />) },
+      { path: 'cirurgias', element: guarded(['surgery:view'], <SurgeriesPage />) },
+      { path: 'cirurgias/:id', element: guarded(['surgery:view'], <SurgeryPage />) },
+      { path: 'microbiologia', element: guarded(['micro:view'], <CulturesPage />) },
+      { path: 'microbiologia/:id', element: guarded(['micro:view'], <CulturePage />) },
+      { path: 'censo', element: guarded(['patient:view', 'indicators:view'], <CensusPage />) },
       {
         path: 'admin',
         element: guarded(['config:view', 'users:view', 'audit:view'], <AdminLayout />),
@@ -40,6 +59,7 @@ export const routes: RouteObject[] = [
           { path: 'parametros', element: guarded(['config:view'], <ParametersPage />) },
           { path: 'referencias', element: guarded(['config:view'], <ReferencesPage />) },
           { path: 'cme', element: guarded(['config:view'], <CmePolicyPage />) },
+          { path: 'setores', element: guarded(['config:view'], <OrgPage />) },
           { path: 'usuarios', element: guarded(['users:view'], <UsersPage />) },
           { path: 'auditoria', element: guarded(['audit:view'], <AuditPage />) },
         ],

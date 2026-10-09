@@ -25,6 +25,7 @@ export const RULE_PARAMETERS: RuleParameterSpec[] = [
   spec('devices', 'associationFromDeviceDay', 'IRAS associada a dispositivo a partir do dia de uso (D1 = instalação)', 'dia', 1, 30),
   spec('devices', 'associationGraceDaysAfterRemoval', 'Dias após a retirada ainda atribuídos ao dispositivo', 'dias', 0, 30),
   spec('admissions', 'hospitalAcquiredFromDay', 'IRAS a partir do dia de internação (D1 = admissão)', 'dia', 1, 30),
+  spec('admissions', 'censusHour', 'Horário do censo diário (paciente-dia e dispositivo-dia)', 'h', 0, 23),
   spec('surgery', 'prophylaxisWindowMin', 'Janela da antibioticoprofilaxia antes da incisão', 'min', 1, 240),
   spec('surgery', 'prophylaxisWindowByDrugMin', 'Janela por fármaco (exceções)', 'min', 1, 240, 'drug_minutes'),
   spec('surgery', 'prophylaxisMaxDurationH', 'Duração máxima da antibioticoprofilaxia', 'h', 1, 168),

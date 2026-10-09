@@ -11,6 +11,11 @@ import { authRoutes } from './routes/auth';
 import { dataRoutes } from './routes/data';
 import { configRoutes } from './routes/config';
 import { adminRoutes } from './routes/admin';
+import { orgRoutes } from './routes/org';
+import { patientRoutes } from './routes/patients';
+import { irasRoutes } from './routes/iras';
+import { surgeryMicroRoutes } from './routes/surgery-micro';
+import { FieldCipher } from './security/field-crypto';
 
 export interface AppOptions {
   db: Kysely<DB>;
@@ -71,6 +76,10 @@ export async function buildApp({ db, env, logger = true }: AppOptions): Promise<
       await api.register(dataRoutes, { db });
       await api.register(configRoutes, { db });
       await api.register(adminRoutes, { db });
+      await api.register(orgRoutes, { db });
+      await api.register(patientRoutes, { db, cipher: FieldCipher.fromEnv(env.FIELD_ENCRYPTION_KEY) });
+      await api.register(irasRoutes, { db });
+      await api.register(surgeryMicroRoutes, { db });
     },
     { prefix: '/api' },
   );

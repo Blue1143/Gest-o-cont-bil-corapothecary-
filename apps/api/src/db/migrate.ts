@@ -1,11 +1,15 @@
 import { Migrator, sql, type Kysely, type Migration, type MigrationProvider } from 'kysely';
 import type { DB } from './types';
 import * as m0001 from './migrations/0001_foundation';
+import * as m0002 from './migrations/0002_clinical';
 
 /** Migrations are registered statically (works the same under tsx, tests and the bundled build). */
 const MIGRATIONS: Record<string, Migration> = {
   '0001_foundation': m0001,
+  '0002_clinical': m0002,
 };
+
+export const APPEND_ONLY_TABLES = ['iras_case_status', 'ccih_note', 'culture_result', 'isolate', 'susceptibility'] as const;
 
 const provider: MigrationProvider = { getMigrations: async () => MIGRATIONS };
 
@@ -26,6 +30,8 @@ export async function grantAppRole(ownerDb: Kysely<DB>, appRole: string): Promis
   await sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${role}`.execute(ownerDb);
   await sql`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${role}`.execute(ownerDb);
   await sql`REVOKE UPDATE, DELETE, TRUNCATE ON audit_log FROM ${role}`.execute(ownerDb);
+  // Clinical history is append-only too (corrections are new rows); the triggers back this up.
+  for (const table of APPEND_ONLY_TABLES) await sql`REVOKE UPDATE, DELETE, TRUNCATE ON ${sql.table(table)} FROM ${role}`.execute(ownerDb);
   await sql`REVOKE ALL ON kysely_migration, kysely_migration_lock FROM ${role}`.execute(ownerDb);
 }
 

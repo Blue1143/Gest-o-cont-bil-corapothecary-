@@ -1,6 +1,6 @@
 # Modelo de dados — CCIH Integra
 
-Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/api/src/db/migrations/0001_foundation.ts`): instituição, unidade, setor, leito, cargo/função, profissional, perfil, usuário, perfil do usuário, escopo do usuário, sessão, log de auditoria, referência clínica, parâmetro de regra, meta de indicador, política de liberação da CME e fatos mensais de indicadores. As demais seções são o modelo alvo das fases seguintes. Convenções:
+Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/api/src/db/migrations/0001_foundation.ts`): instituição, unidade, setor, leito, cargo/função, profissional, perfil, usuário, perfil do usuário, escopo do usuário, sessão, log de auditoria, referência clínica, parâmetro de regra, meta de indicador, política de liberação da CME e fatos mensais de indicadores. **Implementado na Fase 3** (migração `0002_clinical`): `patient`, `admission`, `admission_movement`, `device_use`, `procedure_catalog`, `surgery`, `culture`, `culture_result`, `isolate`, `susceptibility`, `iras_case`, `iras_case_status`, `iras_case_culture` e `ccih_note` (ver §2–§5; diferenças do modelo alvo na nota de cada seção). As demais seções são o modelo alvo das fases seguintes. Convenções:
 
 - Chave primária `id` UUID aleatório (`gen_random_uuid()`, não sequencial → sem enumeração). Números humanos (prontuário, ciclo, lote) são colunas próprias com índice único por instituição.
 - Toda tabela de negócio tem `institution_id` (isolamento multi-instituição) e as editáveis têm `updated_at` e `row_version` (bloqueio otimista). Quem alterou e por quê fica no `audit_log`.
@@ -36,6 +36,8 @@ Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/
 | `device_maintenance` | data/hora, ação, profissional, conformidade | N—1 device_use |
 | `daily_census` | setor, data, pacientes-dia, dispositivo-dia por tipo | denominadores; gerado do movimento/dispositivo ou importado |
 
+> **Fase 3:** o censo é **calculado** a partir de `admission_movement` e `device_use` no horário configurado (sem tabela `daily_census`; ela entra se houver importação de censo externo). Tipos de dispositivo são uma lista fixa (`CVC`, `PICC`, `VM`, `SVD`, `PAI`, `DRENO`, `OUTRO`); `device_type` configurável e `device_maintenance` ficam para a Fase 4 (bundles). Paciente tem `full_name_enc` (AES-256-GCM) e `initials`; no máximo uma internação aberta por paciente e um leito ocupado por vez (índices únicos parciais).
+
 ## 3. Vigilância de IRAS
 
 | Tabela | Campos principais | Relações |
@@ -45,6 +47,8 @@ Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/
 | `iras_case_status_history` | status anterior/novo, justificativa, usuário, data | N—1 caso |
 | `iras_case_finding` | tipo (sinal clínico, imagem, laboratório), valor, data | N—1 caso |
 | `ccih_intervention` | data/hora, profissional, avaliação, conduta, recomendação, acompanhamento | N—1 caso ou internação |
+
+> **Fase 3:** `iras_case` guarda o critério aplicado em `criterion_reference_id` + `criterion_snapshot` (título, versão, fonte, validado) congelado na decisão; `device_associated` é decisão da CCIH. O histórico é `iras_case_status` (somente inserção). Intervenções e evolução são `ccih_note` (tipos avaliação, conduta, recomendação, acompanhamento e retificação — esta aponta para a nota corrigida, somente inserção). Achados estruturados (`iras_case_finding`) e `iras_criterion_set` ficam para quando houver critérios validados pela instituição.
 
 ## 4. Cirurgia
 
@@ -56,6 +60,8 @@ Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/
 | `surgery_material_use` | caixa/material, carga, horário | liga cirurgia ↔ CME |
 | `ssi_followup` | data, meio de contato, achado, encerramento | N—1 cirurgia |
 
+> **Fase 3:** a profilaxia fica em colunas de `surgery` (fármaco, horário da dose, duração, redose); `surgical_prophylaxis` (várias doses), `surgery_material_use` (Fase 5) e `ssi_followup` (Fase 4) ainda não existem. `procedure_catalog.p75_source` registra a origem do P75 (no seed: valor de demonstração a substituir).
+
 ## 5. Microbiologia e antimicrobianos
 
 | Tabela | Campos principais | Relações |
@@ -65,6 +71,8 @@ Modelo relacional (PostgreSQL 16). **Implementado na Fase 2** (migração `apps/
 | `susceptibility` | antimicrobiano, método, CIM, interpretação (S/I/R), versão do breakpoint | N—1 isolado |
 | `antimicrobial_prescription` | fármaco, dose, via, intervalo, início, término previsto, indicação, prescritor, status | N—1 internação; N—N culturas |
 | `antimicrobial_review` | data, revisor CCIH, recomendação (manter, descalonar, suspender…), aceita | N—1 prescrição |
+
+> **Fase 3:** `culture_result` é versionado (`version`, correção exige `justification`); `isolate` e `susceptibility` pendem da versão do resultado. A interpretação S/I/R é a informada, com a versão do breakpoint. Antimicrobianos são da Fase 6.
 
 ## 6. CME e rastreabilidade
 

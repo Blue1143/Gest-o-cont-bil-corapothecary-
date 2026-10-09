@@ -19,6 +19,8 @@ export const DEMO_REFERENCES: ClinicalReference[] = [
     'Prazos de vigilância pós-operatória com e sem implante.'),
   pending('ref-protocolo-insumos', 'Procedimento de gestão de insumos da CCIH', 'protocolo_institucional', 'Procedimento da instituição (modelo de demonstração)',
     'Cobertura mínima de estoque e antecedência de alerta de validade.'),
+  pending('ref-protocolo-censo', 'Procedimento institucional de censo diário', 'protocolo_institucional', 'Procedimento da instituição (modelo de demonstração)',
+    'Horário do censo usado para paciente-dia e dispositivo-dia (denominadores dos indicadores).'),
   pending('ref-protocolo-stewardship', 'Programa de gerenciamento do uso de antimicrobianos', 'protocolo_institucional', 'Programa da instituição (modelo de demonstração)',
     'Gatilhos de revisão de prescrição.'),
 ];
@@ -54,7 +56,7 @@ export const DEMO_CONFIG: InstitutionalConfig = {
       associationFromDeviceDay: param(3, 'ref-anvisa-criterios-iras'),
       associationGraceDaysAfterRemoval: param(1, 'ref-anvisa-criterios-iras'),
     },
-    admissions: { hospitalAcquiredFromDay: param(3, 'ref-anvisa-criterios-iras') },
+    admissions: { hospitalAcquiredFromDay: param(3, 'ref-anvisa-criterios-iras'), censusHour: param(0, 'ref-protocolo-censo') },
     surgery: {
       prophylaxisWindowMin: param(60, 'ref-protocolo-profilaxia'),
       prophylaxisWindowByDrugMin: param({ vancomicina: 120 }, 'ref-protocolo-profilaxia'),

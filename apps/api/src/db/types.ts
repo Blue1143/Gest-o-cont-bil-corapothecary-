@@ -24,6 +24,7 @@ export interface UnitTable {
   institution_id: string;
   name: string;
   active: Generated<boolean>;
+  row_version: RowVersion;
 }
 
 export interface SectorTable {
@@ -34,6 +35,7 @@ export interface SectorTable {
   name: string;
   kind: 'uti' | 'internacao' | 'centro_cirurgico' | 'cme' | 'apoio';
   active: Generated<boolean>;
+  row_version: RowVersion;
 }
 
 export interface BedTable {
@@ -189,6 +191,201 @@ export interface IndicatorFactTable {
   consolidated_at: Timestamp;
 }
 
+type Origin = DataOriginColumn;
+
+export interface PatientTable {
+  id: string;
+  institution_id: string;
+  record_number: string;
+  initials: string;
+  full_name_enc: string | null;
+  birth_date: string | null;
+  sex: 'F' | 'M' | 'NI';
+  data_origin: Origin;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+  row_version: RowVersion;
+}
+
+export interface AdmissionTable {
+  id: Generated<string>;
+  institution_id: string;
+  patient_id: string;
+  admitted_at: Timestamp;
+  discharged_at: NullableTimestamp;
+  outcome: 'alta' | 'obito' | 'transferencia_externa' | null;
+  diagnosis: string | null;
+  data_origin: Origin;
+  created_by: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+  row_version: RowVersion;
+}
+
+export interface AdmissionMovementTable {
+  id: Generated<string>;
+  admission_id: string;
+  sector_id: string;
+  bed_id: string | null;
+  start_at: Timestamp;
+  end_at: NullableTimestamp;
+  reason: string | null;
+  created_by: string | null;
+  created_at: CreatedAt;
+}
+
+export interface DeviceUseTable {
+  id: Generated<string>;
+  institution_id: string;
+  admission_id: string;
+  device_type: 'CVC' | 'PICC' | 'VM' | 'SVD' | 'PAI' | 'DRENO' | 'OUTRO';
+  site: string | null;
+  indication: string | null;
+  inserted_at: Timestamp;
+  removed_at: NullableTimestamp;
+  removal_reason: string | null;
+  data_origin: Origin;
+  created_by: string | null;
+  created_at: CreatedAt;
+  row_version: RowVersion;
+}
+
+export interface ProcedureCatalogTable {
+  id: Generated<string>;
+  institution_id: string;
+  code: string;
+  name: string;
+  specialty: string;
+  p75_minutes: number | null;
+  p75_source: string | null;
+  active: Generated<boolean>;
+}
+
+export interface SurgeryTable {
+  id: Generated<string>;
+  institution_id: string;
+  admission_id: string;
+  procedure_id: string;
+  surgeon_id: string;
+  sector_id: string;
+  room: string | null;
+  started_at: Timestamp;
+  ended_at: NullableTimestamp;
+  wound_class: 'limpa' | 'potencialmente_contaminada' | 'contaminada' | 'infectada' | null;
+  asa: number | null;
+  implant: boolean;
+  urgency: boolean;
+  prophylaxis_indicated: boolean | null;
+  prophylaxis_drug: string | null;
+  prophylaxis_dose_at: NullableTimestamp;
+  /** numeric: pg returns a string. */
+  prophylaxis_duration_h: ColumnType<string | null, number | null, number | null>;
+  redose: boolean | null;
+  notes: string | null;
+  data_origin: Origin;
+  created_by: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+  row_version: RowVersion;
+}
+
+export interface CultureTable {
+  id: Generated<string>;
+  institution_id: string;
+  admission_id: string;
+  sector_id: string;
+  material: string;
+  collected_at: Timestamp;
+  origin: 'manual' | 'lis';
+  data_origin: Origin;
+  created_by: string | null;
+  created_at: CreatedAt;
+}
+
+export interface CultureResultTable {
+  id: Generated<string>;
+  culture_id: string;
+  version: number;
+  outcome: 'negativa' | 'positiva' | 'contaminada';
+  reported_at: Timestamp;
+  breakpoint_version: string | null;
+  notes: string | null;
+  justification: string | null;
+  recorded_by: string | null;
+  recorded_by_name: string;
+  created_at: CreatedAt;
+}
+
+export interface IsolateTable {
+  id: Generated<string>;
+  result_id: string;
+  organism: string;
+  quantity: string | null;
+  resistance_profile: 'MDR' | 'XDR' | 'PDR' | null;
+  mechanism: string | null;
+}
+
+export interface SusceptibilityTable {
+  id: Generated<string>;
+  isolate_id: string;
+  antimicrobial: string;
+  mic: string | null;
+  interpretation: 'S' | 'I' | 'R';
+}
+
+export interface IrasCaseTable {
+  id: Generated<string>;
+  institution_id: string;
+  admission_id: string;
+  iras_type: 'IPCS' | 'PAV' | 'ITU-AC' | 'ISC' | 'OUTRA';
+  status: 'suspeita' | 'em_investigacao' | 'confirmada' | 'descartada';
+  event_date: string;
+  sector_id: string;
+  device_associated: boolean | null;
+  device_use_id: string | null;
+  surgery_id: string | null;
+  criterion_reference_id: string | null;
+  criterion_snapshot: NullableJson;
+  description: string | null;
+  data_origin: Origin;
+  created_by: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+  row_version: RowVersion;
+}
+
+export interface IrasCaseStatusTable {
+  id: Generated<string>;
+  case_id: string;
+  from_status: string | null;
+  to_status: string;
+  justification: string;
+  decided_by: string | null;
+  decided_by_name: string;
+  at: Timestamp;
+}
+
+export interface IrasCaseCultureTable {
+  case_id: string;
+  culture_id: string;
+}
+
+export interface CcihNoteTable {
+  id: Generated<string>;
+  institution_id: string;
+  patient_id: string;
+  admission_id: string | null;
+  case_id: string | null;
+  kind: 'avaliacao' | 'conduta' | 'recomendacao' | 'acompanhamento' | 'retificacao';
+  body: string;
+  amends_id: string | null;
+  justification: string | null;
+  author_id: string | null;
+  author_name: string;
+  data_origin: Origin;
+  created_at: CreatedAt;
+}
+
 export interface DB {
   institution: InstitutionTable;
   unit: UnitTable;
@@ -207,4 +404,18 @@ export interface DB {
   indicator_target: IndicatorTargetTable;
   load_release_policy: LoadReleasePolicyTable;
   indicator_fact: IndicatorFactTable;
+  patient: PatientTable;
+  admission: AdmissionTable;
+  admission_movement: AdmissionMovementTable;
+  device_use: DeviceUseTable;
+  procedure_catalog: ProcedureCatalogTable;
+  surgery: SurgeryTable;
+  culture: CultureTable;
+  culture_result: CultureResultTable;
+  isolate: IsolateTable;
+  susceptibility: SusceptibilityTable;
+  iras_case: IrasCaseTable;
+  iras_case_status: IrasCaseStatusTable;
+  iras_case_culture: IrasCaseCultureTable;
+  ccih_note: CcihNoteTable;
 }

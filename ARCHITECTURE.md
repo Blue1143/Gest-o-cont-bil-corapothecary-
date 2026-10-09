@@ -39,7 +39,16 @@ Fatos mensais por setor (`FactRow`: período, setor, contagens) → `computeIndi
 
 ## Configuração institucional
 
-`InstitutionalConfig` = fuso horário + metas (`IndicatorTarget`, com origem e aprovador) + parâmetros de regra (`RuleParameter`, cada um ligado a uma `ClinicalReference` com versão, fonte, validação e status). Política de liberação de cargas da CME também é configuração. A Fase 2 move isso para tabelas versionadas editáveis em Administração, com auditoria.
+`InstitutionalConfig` = fuso horário + metas (`IndicatorTarget`, com origem e aprovador) + parâmetros de regra (`RuleParameter`, cada um ligado a uma `ClinicalReference` com versão, fonte, validação e status). Política de liberação de cargas da CME também é configuração. Tudo fica em tabelas versionadas, editáveis em Administração, com auditoria; um parâmetro que ainda não existe (ex.: adicionado por uma versão nova) pode ser configurado pela primeira vez pela mesma tela.
+
+## Core clínico (Fase 3)
+
+- **Porta `clinical`** em `CcihDataSource`, presente só com o backend: o navegador nunca gera pacientes sintéticos. Sem ela, as telas clínicas explicam que o módulo exige a API.
+- **Denominadores reais**: `censusOfDay`/`censusOfRange` (`@ccih/domain`) contam um paciente-dia para o setor onde o paciente está no horário de censo configurado (`admissions.censusHour`) e um dispositivo-dia para cada dispositivo em uso no mesmo instante. Sem o parâmetro, nada é calculado.
+- **Consolidação**: `consolidateClinicalFacts` transforma permanências, dispositivos, casos (status no fim do mês para investigações abertas), cirurgias e isolados MDR em fatos mensais. A API (`POST /facts/consolidate`, `consolidateMonths`) substitui só as métricas calculadas e mantém as dos módulos ainda não implantados. O seed usa o mesmo caminho.
+- **Fluxo de IRAS**: `IRAS_TRANSITIONS`, `transitionPermission` e `checkTransition` ficam no domínio e são aplicados pela API e pela interface; `irasContext` mostra a elegibilidade pelos parâmetros, sem classificar.
+- **Datas**: o que o usuário digita em `datetime-local` é interpretado no fuso da instituição (`fromLocalInput`), não no do navegador; o servidor guarda instantes UTC.
+- **DTOs** compartilhados (`clinical/dto.ts`) definem o contrato entre API e web.
 
 ## Sessão no cliente
 

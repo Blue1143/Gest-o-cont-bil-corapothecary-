@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import { DEFAULT_ROLE_PERMISSIONS, ROLE_LABEL, addMonths, monthStart, parametersFromRules, todayIn, type RoleCode } from '@ccih/domain';
-import { DEMO_CONFIG, DEMO_LOAD_POLICY, DEMO_REFERENCES, DEMO_SECTORS, DEMO_UNITS, generateFacts } from '@ccih/demo-data';
+import { DEMO_CONFIG, DEMO_LOAD_POLICY, DEMO_REFERENCES, DEMO_SECTORS, DEMO_UNITS, WARD_PROFILES, generateFacts } from '@ccih/demo-data';
 import { audit } from '../audit/audit';
 import { hashPassword, passwordProblem } from '../security/crypto';
+import { consolidateMonths } from '../repositories/consolidation';
+import { seedClinical } from './seed-clinical';
 import type { DB } from './types';
 
 /** Synthetic users, one per initial profile. Logins are fictitious; passwords are never stored in code. */
@@ -27,6 +29,7 @@ export interface SeedResult {
   institutionId: string;
   credentials: Array<{ login: string; role: RoleCode; password: string }>;
   facts: number;
+  clinical: { admissions: number; surgeries: number; cases: number; cultures: number };
 }
 
 /** Synthetic demo institution, coherent across entities and flagged data_origin = 'demo'. */
@@ -51,7 +54,8 @@ export async function seedDemo(db: Kysely<DB>, opts: SeedOptions = {}): Promise<
       const row = await trx.insertInto('sector').values({ institution_id: institutionId, unit_id: unitIds.get(s.unitId)!, code: s.code, name: s.name, kind: s.kind }).returning('id').executeTakeFirstOrThrow();
       sectorIds.set(s.code, row.id);
       if (s.kind === 'uti' || s.kind === 'internacao') {
-        await trx.insertInto('bed').values(Array.from({ length: 6 }, (_, i) => ({ sector_id: row.id, code: String(i + 1).padStart(2, '0') }))).execute();
+        const beds = WARD_PROFILES[s.code]?.beds ?? 6;
+        await trx.insertInto('bed').values(Array.from({ length: beds }, (_, i) => ({ sector_id: row.id, code: String(i + 1).padStart(2, '0') }))).execute();
       }
     }
 
@@ -105,7 +109,13 @@ export async function seedDemo(db: Kysely<DB>, opts: SeedOptions = {}): Promise<
     );
     for (let i = 0; i < facts.length; i += 1000) await trx.insertInto('indicator_fact').values(facts.slice(i, i + 1000)).execute();
 
-    await audit(trx, { institutionId, userId: null, login: 'seed', ip: null, userAgent: null }, { action: 'seed', entity: 'institution', entityId: institutionId, context: { origin: 'demo', users: DEMO_USERS.length, facts: facts.length } });
-    return { institutionId, credentials, facts: facts.length };
+    // Synthetic clinical records for the last two closed months and the current one; the closed
+    // months' clinical metrics are then consolidated from those records (same path as production).
+    const clinicalFrom = addMonths(anchor, -1);
+    const clinical = await seedClinical(trx, { institutionId, sectorIds, refIds, from: clinicalFrom, now, timezone: DEMO_CONFIG.timezone });
+    await consolidateMonths(trx, institutionId, [clinicalFrom, anchor], now);
+
+    await audit(trx, { institutionId, userId: null, login: 'seed', ip: null, userAgent: null }, { action: 'seed', entity: 'institution', entityId: institutionId, context: { origin: 'demo', users: DEMO_USERS.length, facts: facts.length, ...clinical } });
+    return { institutionId, credentials, facts: facts.length, clinical };
   });
 }

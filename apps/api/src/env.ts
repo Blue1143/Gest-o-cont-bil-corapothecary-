@@ -14,6 +14,11 @@ const schema = z.object({
   LOGIN_LOCK_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
   /** Login attempts per IP per minute (brute-force throttling, in addition to the per-account lock). */
   LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(10),
+  /** 32 bytes in base64. Without it, patient full names cannot be stored (initials + record number only). */
+  FIELD_ENCRYPTION_KEY: z
+    .string()
+    .refine((v) => Buffer.from(v, 'base64').length === 32, 'deve ter 32 bytes em base64')
+    .optional(),
   COOKIE_SECURE: z
     .enum(['true', 'false'])
     .default('true')

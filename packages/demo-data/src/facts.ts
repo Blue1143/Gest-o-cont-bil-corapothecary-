@@ -5,8 +5,10 @@ import { binomial, hashSeed, poisson, rng } from './random';
  * Synthetic monthly facts per sector. Rates are plausible orders of magnitude for a demo, with a
  * mild improvement trend so indicators can be exercised — they are not benchmarks.
  */
-interface WardProfile {
+export interface WardProfile {
   beds: number;
+  /** Mean length of stay (days) used by the clinical generator. */
+  los: number;
   occupancy: number;
   cvc: number;
   vm: number;
@@ -19,12 +21,12 @@ interface WardProfile {
   staff: number;
 }
 
-const WARDS: Record<string, WardProfile> = {
-  'uti-adulto': { beds: 20, occupancy: 0.9, cvc: 0.62, vm: 0.45, svd: 0.55, ipcs: 2.2, pav: 6.8, itu: 2.4, outras: 0.8, staff: 70 },
-  'uti-neo': { beds: 15, occupancy: 0.85, cvc: 0.38, vm: 0.25, svd: 0.02, ipcs: 3.8, pav: 2.2, itu: 0, outras: 0.6, staff: 55 },
-  'uti-coronariana': { beds: 10, occupancy: 0.85, cvc: 0.35, vm: 0.15, svd: 0.35, ipcs: 1.6, pav: 4.0, itu: 2.0, outras: 0.4, staff: 35 },
-  'clinica-medica': { beds: 40, occupancy: 0.88, cvc: 0.08, vm: 0, svd: 0.12, ipcs: 1.2, pav: 0, itu: 3.2, outras: 0.5, staff: 80 },
-  'clinica-cirurgica': { beds: 30, occupancy: 0.82, cvc: 0.06, vm: 0, svd: 0.1, ipcs: 1.0, pav: 0, itu: 2.6, outras: 0.4, staff: 60 },
+export const WARD_PROFILES: Record<string, WardProfile> = {
+  'uti-adulto': { beds: 20, los: 8, occupancy: 0.9, cvc: 0.62, vm: 0.45, svd: 0.55, ipcs: 2.2, pav: 6.8, itu: 2.4, outras: 0.8, staff: 70 },
+  'uti-neo': { beds: 15, los: 14, occupancy: 0.85, cvc: 0.38, vm: 0.25, svd: 0.02, ipcs: 3.8, pav: 2.2, itu: 0, outras: 0.6, staff: 55 },
+  'uti-coronariana': { beds: 10, los: 5, occupancy: 0.85, cvc: 0.35, vm: 0.15, svd: 0.35, ipcs: 1.6, pav: 4.0, itu: 2.0, outras: 0.4, staff: 35 },
+  'clinica-medica': { beds: 40, los: 6, occupancy: 0.88, cvc: 0.08, vm: 0, svd: 0.12, ipcs: 1.2, pav: 0, itu: 3.2, outras: 0.5, staff: 80 },
+  'clinica-cirurgica': { beds: 30, los: 2.5, occupancy: 0.82, cvc: 0.06, vm: 0, svd: 0.1, ipcs: 1.0, pav: 0, itu: 2.6, outras: 0.4, staff: 60 },
 };
 
 const DAYS_IN_MONTH = (iso: string) => new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)), 0)).getUTCDate();
@@ -124,7 +126,7 @@ export function generateFacts(from: string, to: string, anchor: string): FactRow
     // 0 → 1 across the twelve months that end at `anchor`.
     const monthsBack = (Number(anchor.slice(0, 4)) - Number(period.slice(0, 4))) * 12 + Number(anchor.slice(5, 7)) - Number(period.slice(5, 7));
     const progress = Math.min(1, Math.max(0, 1 - monthsBack / 11));
-    for (const [sectorId, profile] of Object.entries(WARDS)) rows.push({ period, sectorId, counts: wardCounts(sectorId, profile, period, progress) });
+    for (const [sectorId, profile] of Object.entries(WARD_PROFILES)) rows.push({ period, sectorId, counts: wardCounts(sectorId, profile, period, progress) });
     rows.push({ period, sectorId: 'centro-cirurgico', counts: surgeryCounts(period, progress) });
     rows.push({ period, sectorId: 'cme', counts: cmeCounts(period) });
   }

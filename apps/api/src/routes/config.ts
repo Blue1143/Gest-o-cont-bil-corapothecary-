@@ -22,7 +22,8 @@ const TargetBody = z
   })
   .strict();
 
-const RuleBody = z.object({ value: z.unknown(), referenceId: Uuid.nullable(), rowVersion: RowVersion, justification: Justification }).strict();
+/** rowVersion null = first configuration of a parameter that has no value yet (e.g. added by a later version). */
+const RuleBody = z.object({ value: z.unknown(), referenceId: Uuid.nullable(), rowVersion: RowVersion.nullable(), justification: Justification }).strict();
 
 const ReferenceFields = {
   title: z.string().trim().min(3).max(200),
@@ -109,8 +110,16 @@ export async function configRoutes(app: FastifyInstance, { db }: { db: Kysely<DB
     return db.transaction().execute(async (trx) => {
       await assertReference(trx, auth.institutionId, body.referenceId);
       const before = await trx.selectFrom('rule_parameter').selectAll().where('institution_id', '=', auth.institutionId).where('key', '=', spec.key).forUpdate().executeTakeFirst();
-      if (!before) throw notFound('Parâmetro');
-      if (before.row_version !== body.rowVersion) throw conflict();
+      if (before ? before.row_version !== body.rowVersion : body.rowVersion !== null) throw conflict();
+      if (!before) {
+        const created = await trx
+          .insertInto('rule_parameter')
+          .values({ institution_id: auth.institutionId, key: spec.key, value: JSON.stringify(body.value), reference_id: body.referenceId, approved_by: auth.userId, approved_by_name: auth.displayName, updated_at: new Date() })
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        await audit(trx, actorOf(req), { action: 'create', entity: 'rule_parameter', entityId: spec.key, before: null, after: created, context: { justification: body.justification } });
+        return { ok: true, rowVersion: created.row_version };
+      }
       const after = await trx
         .updateTable('rule_parameter')
         .set({ value: JSON.stringify(body.value), reference_id: body.referenceId, approved_by: auth.userId, approved_by_name: auth.displayName, updated_at: new Date(), row_version: before.row_version + 1 })

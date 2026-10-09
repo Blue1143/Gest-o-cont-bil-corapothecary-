@@ -20,7 +20,7 @@ export function useConfigVersions() {
 export type FieldErrors = Record<string, string>;
 
 /** Runs an admin change, refreshes configuration everywhere and maps API field errors. */
-export function useAdminMutation<I>(run: (input: I) => Promise<void>, invalidate: string[] = ['institution', 'config-versions']) {
+export function useAdminMutation<I, O = void>(run: (input: I) => Promise<O>, invalidate: string[] = ['institution', 'config-versions']) {
   const client = useQueryClient();
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const mutation = useMutation({

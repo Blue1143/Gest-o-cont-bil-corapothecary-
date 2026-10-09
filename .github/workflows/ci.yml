@@ -38,3 +38,50 @@ jobs:
       - run: npm run build
         env:
           VITE_DATA_SOURCE: api
+
+  e2e:
+    needs: check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ccih_owner
+          POSTGRES_DB: ccih_e2e
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ccih_owner" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_OWNER_URL: postgres://ccih_owner@localhost:5432/ccih_e2e
+      DATABASE_URL: postgres://ccih_app@localhost:5432/ccih_e2e
+      APP_ORIGIN: http://localhost:5173
+      COOKIE_SECURE: 'false'
+      NODE_ENV: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Papel de aplicação com privilégio mínimo
+        run: psql -h localhost -U ccih_owner -d ccih_e2e -c "CREATE ROLE ccih_app LOGIN"
+      - name: Senha aleatória dos usuários sintéticos (gerada por execução, mascarada)
+        run: |
+          pw="E2e-$(openssl rand -hex 12)-Aa1!"
+          echo "::add-mask::$pw"
+          echo "SEED_PASSWORD=$pw" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$pw" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_DATA_SOURCE: api
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:reset -w @ccih/api
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

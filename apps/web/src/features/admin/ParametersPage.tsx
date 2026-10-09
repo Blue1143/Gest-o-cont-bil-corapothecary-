@@ -29,7 +29,7 @@ export function ParametersPage() {
   const [confirm, setConfirm] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const canEdit = session.writable && session.can('config:rules:edit');
-  const save = useAdminMutation((d: { key: string; value: unknown; referenceId: string | null; rowVersion: number; justification: string }) => admin!.saveRule(d.key, d));
+  const save = useAdminMutation((d: { key: string; value: unknown; referenceId: string | null; rowVersion: number | null; justification: string }) => admin!.saveRule(d.key, d));
 
   if (institution.isPending) return <LoadingState />;
   if (institution.isError) return <ErrorState onRetry={() => void institution.refetch()} />;
@@ -61,7 +61,7 @@ export function ParametersPage() {
 
   const doSave = () => {
     if (!spec) return;
-    const rowVersion = versions.data?.rules.find((r) => r.key === spec.key)?.row_version ?? 1;
+    const rowVersion = versions.data?.rules.find((r) => r.key === spec.key)?.row_version ?? null;
     save.mutation.mutate(
       { key: spec.key, value: parsedValue(), referenceId: draft.referenceId || null, rowVersion, justification: draft.justification.trim() },
       { onSettled: () => setConfirm(false), onSuccess: () => { setSaved(`Parâmetro “${spec.label}” atualizado.`); setSpec(null); } },

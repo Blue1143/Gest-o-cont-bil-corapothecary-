@@ -39,6 +39,8 @@ export interface InstitutionalRules {
   admissions: {
     /** Hospital day from which an infection is classified as healthcare-associated. */
     hospitalAcquiredFromDay?: RuleParameter<number>;
+    /** Local hour of the daily census: a patient (or device) present at that time counts one day. */
+    censusHour?: RuleParameter<number>;
   };
   surgery: {
     /** Maximum minutes between the prophylaxis dose and the incision. */

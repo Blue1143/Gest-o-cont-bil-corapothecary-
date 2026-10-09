@@ -2,12 +2,19 @@
 
 Plataforma de gestão integrada da CCIH/SCIRAS: vigilância epidemiológica de IRAS, indicadores, bundles, auditorias, CME e rastreabilidade, microbiologia, stewardship de antimicrobianos e segurança do paciente.
 
-> **Estado atual: Fases 1 e 2 concluídas.** Há front-end (React), API (Fastify) e banco (PostgreSQL) com autenticação, perfis de acesso aplicados no servidor, log de auditoria imutável e configurações editáveis. O banco de desenvolvimento é preenchido com **dados sintéticos**, sinalizados em toda tela. Os módulos clínicos (pacientes, IRAS, cirurgias, culturas) começam na Fase 3 — veja [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Estado atual: Fases 1, 2 e 3 concluídas.** Front-end (React), API (Fastify) e banco (PostgreSQL) com autenticação, perfis aplicados no servidor, log de auditoria imutável, configurações editáveis e o **core clínico**: pacientes, internações, dispositivos, censo diário, vigilância de IRAS, cirurgias e microbiologia. O banco de desenvolvimento é preenchido com **dados sintéticos** (sem pacientes reais), sinalizados em toda tela. Próxima etapa: CCIH operacional (Fase 4) — veja [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## O que já funciona
 
 - **Acesso**: login com bloqueio por tentativas e limite por IP, sessão em cookie `HttpOnly`/`SameSite=Strict` com expiração por inatividade e tempo máximo, aviso antes de expirar, saída que limpa todos os dados em cache (estações compartilhadas).
-- **Perfis (RBAC)**: Administrador, Enfermeiro CCIH, Médico infectologista, CME, Auditor, Gestor e Consulta, com 31 permissões granulares e **escopo por setor**. Tudo verificado no servidor; o menu mostra só o que o perfil pode usar.
+- **Perfis (RBAC)**: Administrador, Enfermeiro CCIH, Médico infectologista, CME, Auditor, Gestor e Consulta, com 35 permissões granulares e **escopo por setor**. Tudo verificado no servidor; o menu mostra só o que o perfil pode usar.
+- **Pacientes** identificados por iniciais + prontuário. O nome completo é opcional, **cifrado** (AES-256-GCM) e só aparece com a permissão de dado identificado, mediante motivo, com registro no log. Página do paciente com linha do tempo longitudinal, internações e permanências por setor/leito, dispositivos com dia de uso, transferências, saída, cirurgias, culturas, casos de IRAS e **evolução CCIH** permanente (correções por retificação).
+- **Censo diário**: ocupação e denominadores reais (paciente-dia e dispositivo-dia) calculados das permanências e dispositivos no horário de censo configurado.
+- **Vigilância IRAS**: suspeita → investigação → confirmação/descarte, com histórico imutável, justificativa obrigatória, vínculos com dispositivo, cirurgia e culturas da mesma internação, apoio à decisão pelos parâmetros configurados (dia de internação, dia de dispositivo, elegibilidade) e critério diagnóstico congelado na decisão — marcado "Requer validação institucional" quando a referência não foi validada. O sistema nunca classifica sozinho.
+- **Cirurgias**: registro com início/término, potencial de contaminação, ASA, implante, índice de risco, antibioticoprofilaxia avaliada pela janela institucional e janela de vigilância de ISC. Filtros por procedimento, cirurgião e classificação.
+- **Microbiologia**: coletas, resultados **versionados** (correção = nova versão com justificativa), isolados, antibiograma e perfil MDR/XDR/PDR informado pelo laboratório/CCIH.
+- **Consolidação de indicadores** a partir dos registros clínicos (IRAS por tipo, densidades, MDR, investigações abertas, profilaxia, ISC em cirurgia limpa), auditada; indicadores sem regra configurada não são calculados.
+- **Unidades, setores e leitos** cadastráveis em Administração.
 - **Visão Geral** executiva com KPIs de IRAS, exposição, tendências, IRAS por setor, bundles, CME, antimicrobianos e treinamentos — calculados por um único motor de indicadores; filtros de período, unidade e setor.
 - **Catálogo de indicadores** (31) com fórmula, unidade, direção, fonte, responsável e meta com origem.
 - **Administração**:
@@ -81,16 +88,19 @@ Sem backend, `VITE_DATA_SOURCE=demo` abre a interface com dados sintéticos gera
 | --- | --- |
 | `npm run lint` | ESLint (TypeScript, hooks, acessibilidade JSX), zero avisos |
 | `npm run typecheck` | `tsc` estrito em todos os pacotes |
-| `npm test` | Vitest: domínio (38), dados sintéticos (3), componentes (14), web (16), API com PostgreSQL real (26) |
+| `npm test` | Vitest: domínio (50), dados sintéticos (7), componentes (14), web (24), API com PostgreSQL real (42) |
 | `npm run build` | Verifica tokens, gera `apps/web/dist` e `apps/api/dist` |
 | `npm run check` | Tudo acima |
+| `npm run e2e` | Playwright (Chromium) contra API + banco + web reais: fluxo completo de IRAS e bloqueios por perfil |
 
-Os testes da API recriam o banco `ccih_test` a cada execução (`TEST_DATABASE_URL`, `TEST_DATABASE_OWNER_URL`). A CI (`.github/workflows/ci.yml`) sobe um PostgreSQL 16 efêmero, acessível só dentro do job e sem senha versionada, e roda `npm audit`, lint, typecheck, testes e build.
+O E2E reaproveita os servidores de desenvolvimento se estiverem rodando (API :3001, web :5173); senão sobe a API compilada e o `vite preview` (gere antes o build com `VITE_DATA_SOURCE=api`). Ele precisa do banco com o seed sintético e lê as senhas de `E2E_PASSWORD` ou do arquivo local do seed — nenhuma senha fica no código.
+
+Os testes da API recriam o banco `ccih_test` a cada execução (`TEST_DATABASE_URL`, `TEST_DATABASE_OWNER_URL`). A CI (`.github/workflows/ci.yml`) sobe um PostgreSQL 16 efêmero, acessível só dentro do job e sem senha versionada, e roda `npm audit`, lint, typecheck, testes e build; um segundo job gera uma senha aleatória mascarada, recria o banco de demonstração e roda o E2E.
 
 ## Variáveis de ambiente
 
 - **Web** (`apps/web/.env.local`): `VITE_DATA_SOURCE` = `api` ou `demo`. Obrigatória em build de produção. Nenhum segredo vai para o front-end.
-- **API** (`apps/api/.env`): veja [apps/api/.env.example](apps/api/.env.example) — URLs do banco, `APP_ORIGIN`, tempos de sessão, bloqueio, limite de login, `COOKIE_SECURE`, `TRUST_PROXY`. A API não inicia com configuração inválida, e exige `COOKIE_SECURE=true` em produção.
+- **API** (`apps/api/.env`): veja [apps/api/.env.example](apps/api/.env.example) — URLs do banco, `APP_ORIGIN`, tempos de sessão, bloqueio, limite de login, `COOKIE_SECURE`, `TRUST_PROXY` e, opcionalmente, `FIELD_ENCRYPTION_KEY` (32 bytes em base64, gerada localmente) para permitir o nome completo cifrado de pacientes; sem ela o sistema trabalha só com iniciais e prontuário. A API não inicia com configuração inválida, e exige `COOKIE_SECURE=true` em produção.
 
 ## Build e deploy
 
@@ -110,10 +120,10 @@ VITE_DATA_SOURCE=api npm run build
 - [SECURITY.md](SECURITY.md) — segurança e LGPD
 - [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) — tokens e componentes
 - [CONTRIBUTING.md](CONTRIBUTING.md) — regras do projeto e testes
-- [docs/auditoria/](docs/auditoria/) — auditorias técnicas (Fase 1, reauditoria 1.1, Fase 2)
+- [docs/auditoria/](docs/auditoria/) — auditorias técnicas (Fase 1, reauditoria 1.1, Fases 2 e 3)
 - [docs/ROADMAP.md](docs/ROADMAP.md) — fases, dependências e riscos
 - `ccih-integra/` — design system publicado (guia de marca, conteúdo técnico, tokens)
 
 ## Aviso clínico
 
-Critérios, metas e parâmetros carregados pelo seed são **de demonstração e exigem validação institucional**. O sistema apoia a decisão da CCIH; não a substitui.
+Critérios, metas, parâmetros e durações de referência (P75) carregados pelo seed são **de demonstração e exigem validação institucional**. O sistema apoia a decisão da CCIH; não a substitui.

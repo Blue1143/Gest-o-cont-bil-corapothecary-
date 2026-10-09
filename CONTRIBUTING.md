@@ -23,6 +23,9 @@ O PR só é aceito com tudo verde.
 10. Textos de interface em pt-BR; identificadores de código em inglês.
 11. **Toda rota da API declara a permissão exigida** (`requirePermission`) e filtra por instituição e escopo. Toda alteração de configuração exige justificativa, usa `row_version` e chama `audit()` na mesma transação.
 12. Nova tabela = nova migração em `apps/api/src/db/migrations` (nunca editar uma migração já aplicada).
+13. **Histórico clínico não se edita**: status de IRAS, evoluções CCIH e resultados de cultura são somente inserção; correção é um novo registro com justificativa.
+14. **Datas digitadas** usam o fuso da instituição (`toLocalInput`/`fromLocalInput`), nunca o do navegador.
+15. Registros clínicos herdam `data_origin` da instituição: dado sintético nunca vira dado institucional.
 
 ## Commits
 
@@ -36,4 +39,4 @@ Mensagens no imperativo, curtas, explicando o porquê quando não for óbvio. N�
 | Componentes | `packages/ui/src/**/*.test.tsx` | Vitest + Testing Library |
 | Aplicação (rotas, filtros, fonte de dados) | `apps/web/src/**/*.test.tsx` | Vitest + Testing Library |
 | Integração API | `apps/api/test` — banco `ccih_test` recriado a cada execução | Vitest + PostgreSQL 16 |
-| E2E (fluxos IRAS e CME) | `e2e/` (Fase 3+) | Playwright |
+| E2E (fluxos IRAS; CME na Fase 5) | `e2e/` — `npm run e2e` | Playwright |

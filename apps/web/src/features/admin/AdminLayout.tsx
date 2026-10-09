@@ -8,6 +8,7 @@ export const ADMIN_SECTIONS: Array<{ key: string; label: string; path: string; p
   { key: 'parametros', label: 'Parâmetros', path: '/admin/parametros', permission: 'config:view' },
   { key: 'referencias', label: 'Referências', path: '/admin/referencias', permission: 'config:view' },
   { key: 'cme', label: 'Política da CME', path: '/admin/cme', permission: 'config:view' },
+  { key: 'setores', label: 'Unidades e setores', path: '/admin/setores', permission: 'config:view' },
   { key: 'usuarios', label: 'Usuários e perfis', path: '/admin/usuarios', permission: 'users:view' },
   { key: 'auditoria', label: 'Log de auditoria', path: '/admin/auditoria', permission: 'audit:view' },
 ];

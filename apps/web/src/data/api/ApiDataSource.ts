@@ -1,5 +1,5 @@
 import type { FactRow, InstitutionData, WithProvenance } from '@ccih/domain';
-import type { AdminPort, AuthPort, CcihDataSource, FactsQuery, SessionInfo } from '../port';
+import type { AdminPort, AuthPort, CcihDataSource, ClinicalPort, FactsQuery, OrgAdminPort, SessionInfo } from '../port';
 import { createHttpClient, type HttpClient } from './http';
 
 /** Backend source: every authorization decision is taken by the API; the UI only reflects it. */
@@ -7,6 +7,8 @@ export class ApiDataSource implements CcihDataSource {
   readonly origin = 'real' as const;
   readonly auth: AuthPort;
   readonly admin: AdminPort;
+  readonly clinical: ClinicalPort;
+  readonly orgAdmin: OrgAdminPort;
   private readonly http: HttpClient;
 
   constructor(base = '/api', onUnauthorized: () => void = () => {}) {
@@ -37,6 +39,48 @@ export class ApiDataSource implements CcihDataSource {
       audit: (q) => http.get('/audit', q),
       verifyAudit: () => http.get('/audit/verify'),
       logExport: (event) => ok(http.send('POST', '/audit/events/export', event)),
+    };
+    const id = (v: string) => encodeURIComponent(v);
+    this.clinical = {
+      org: () => http.get('/org'),
+      patients: (q) => http.get('/patients', q),
+      patient: (p) => http.get(`/patients/${id(p)}`),
+      createPatient: (input) => http.send('POST', '/patients', input),
+      updatePatient: (p, input) => ok(http.send('PUT', `/patients/${id(p)}`, input)),
+      revealName: (p, reason) => http.send('POST', `/patients/${id(p)}/reveal`, { reason }),
+      admit: (p, input) => http.send('POST', `/patients/${id(p)}/admissions`, input),
+      transfer: (a, input) => ok(http.send('POST', `/admissions/${id(a)}/transfer`, input)),
+      discharge: (a, input) => http.send('POST', `/admissions/${id(a)}/discharge`, input),
+      addDevice: (a, input) => ok(http.send('POST', `/admissions/${id(a)}/devices`, input)),
+      removeDevice: (d, input) => ok(http.send('POST', `/devices/${id(d)}/remove`, input)),
+      addNote: (p, input) => ok(http.send('POST', `/patients/${id(p)}/notes`, input)),
+      amendNote: (n, input) => ok(http.send('POST', `/notes/${id(n)}/amend`, input)),
+      census: (date) => http.get('/census', { date }),
+      censusMonth: (month) => http.get('/census/month', { month }),
+      cases: (q) => http.get('/iras', q),
+      case: (c) => http.get(`/iras/${id(c)}`),
+      createCase: (input) => http.send('POST', '/iras', input),
+      updateCase: (c, input) => ok(http.send('PUT', `/iras/${id(c)}`, input)),
+      changeCaseStatus: (c, input) => http.send('POST', `/iras/${id(c)}/status`, input),
+      surgeries: (q) => http.get('/surgeries', q),
+      surgery: (sid) => http.get(`/surgeries/${id(sid)}`),
+      createSurgery: (input) => http.send('POST', '/surgeries', input),
+      updateSurgery: (sid, input) => ok(http.send('PUT', `/surgeries/${id(sid)}`, input)),
+      professionals: () => http.get('/professionals'),
+      procedures: () => http.get('/procedures'),
+      cultures: (q) => http.get('/cultures', q),
+      culture: (c) => http.get(`/cultures/${id(c)}`),
+      createCulture: (input) => http.send('POST', '/cultures', input),
+      addCultureResult: (c, input) => http.send('POST', `/cultures/${id(c)}/results`, input),
+      consolidate: (months) => http.send('POST', '/facts/consolidate', { months }),
+    };
+    this.orgAdmin = {
+      createUnit: (input) => ok(http.send('POST', '/org/units', input)),
+      updateUnit: (u, input) => ok(http.send('PUT', `/org/units/${id(u)}`, input)),
+      createSector: (input) => ok(http.send('POST', '/org/sectors', input)),
+      updateSector: (sid, input) => ok(http.send('PUT', `/org/sectors/${id(sid)}`, input)),
+      addBeds: (sid, input) => ok(http.send('POST', `/org/sectors/${id(sid)}/beds`, input)),
+      updateBed: (b, input) => ok(http.send('PUT', `/org/beds/${id(b)}`, input)),
     };
   }
 
