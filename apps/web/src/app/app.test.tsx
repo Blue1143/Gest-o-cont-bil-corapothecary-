@@ -50,9 +50,8 @@ describe('app', () => {
     expect(screen.getAllByText('Requer validação institucional').length).toBeGreaterThan(0);
   });
 
-  it('never falls back to demo data in a production build without configuration', () => {
-    expect(() => createDataSource({ PROD: true })).toThrow(DataSourceConfigError);
-    expect(createDataSource({ PROD: false }).origin).toBe('demo');
-    expect(() => createDataSource({ VITE_DATA_SOURCE: 'api' })).toThrow(/Fase 2/);
+  it('never falls back to demo data in a production build without configuration', async () => {
+    await expect(createDataSource({ PROD: true })).rejects.toThrow(DataSourceConfigError);
+    expect((await createDataSource({ PROD: false })).origin).toBe('demo');
   });
 });

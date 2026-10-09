@@ -1,5 +1,7 @@
 # Tipos de IRAS e como identificar
 
+> **Status: Requer validação institucional.** Conteúdo de apoio, redigido sem conferência com as fontes oficiais vigentes. Fonte declarada: Critérios Diagnósticos de IRAS (ANVISA) — edição vigente a confirmar. Versão: a confirmar. Validado por: —. Atualização: 09/10/2026. No sistema, cada critério, prazo, ponto de corte e meta citados aqui é um parâmetro configurável em Administração, ligado a uma referência com versão, fonte e status, e só vale como regra após validação da CCIH.
+
 Resumo operacional para a tela de investigação e para os textos de ajuda do sistema. A referência é o caderno **Critérios Diagnósticos das IRAS (ANVISA)**; confirme sempre na edição vigente antes de alterar uma regra do sistema. Exiba cada tipo com `InfectionTag`.
 
 ## Conceitos que o sistema calcula

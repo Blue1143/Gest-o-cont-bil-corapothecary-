@@ -9,29 +9,30 @@ import { routes } from './app/routes';
 import { createDataSource, DataSourceConfigError, DataSourceProvider } from './data/source';
 import type { CcihDataSource } from './data/port';
 
-const router = createBrowserRouter(routes);
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
+const root = createRoot(document.getElementById('root')!);
 
-let source: CcihDataSource | null = null;
-let configError: string | null = null;
-try {
-  source = createDataSource();
-} catch (e) {
-  configError = e instanceof DataSourceConfigError ? e.message : 'Falha ao iniciar a aplicação.';
-}
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    {source ? (
+function renderApp(source: CcihDataSource) {
+  const router = createBrowserRouter(routes);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
+  root.render(
+    <StrictMode>
       <QueryClientProvider client={queryClient}>
         <DataSourceProvider source={source}>
           <RouterProvider router={router} />
         </DataSourceProvider>
       </QueryClientProvider>
-    ) : (
-      <div className="ig-root" style={{ padding: 24 }}>
-        <ErrorState title="Configuração incompleta">{configError}</ErrorState>
-      </div>
-    )}
-  </StrictMode>,
-);
+    </StrictMode>,
+  );
+}
+
+function renderConfigError(message: string) {
+  root.render(
+    <div className="ig-root" style={{ padding: 24 }}>
+      <ErrorState title="Configuração incompleta">{message}</ErrorState>
+    </div>,
+  );
+}
+
+createDataSource()
+  .then(renderApp)
+  .catch((e: unknown) => renderConfigError(e instanceof DataSourceConfigError ? e.message : 'Falha ao iniciar a aplicação.'));

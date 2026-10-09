@@ -4,6 +4,7 @@ export {
   type ButtonProps, type StatusBadgeProps, type InfectionTagProps, type ProvenanceKind, type AlertBannerProps, type CardProps,
 } from './components/Basics';
 export { DataTable, type Column, type DataTableProps, type TableState } from './components/DataTable';
+export { Disclosure, type DisclosureProps } from './components/Disclosure';
 export { KpiCard, type KpiCardProps } from './components/KpiCard';
 export { ChartFrame, type ChartFrameProps } from './charts/ChartFrame';
 export { TrendChart, type TrendChartProps, type TrendSeries } from './charts/TrendChart';

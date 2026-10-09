@@ -189,3 +189,12 @@
   .ig-kpi { padding: var(--space-4); }
   .ig-chk li { grid-template-columns: 1fr; }
 }
+
+/* Disclosure (progressive disclosure sections) */
+.ig-disclosure > summary { list-style: none; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; cursor: pointer; padding: var(--space-1) 0; margin-bottom: var(--space-3); border-radius: var(--radius-md); }
+.ig-disclosure > summary::-webkit-details-marker { display: none; }
+.ig-disclosure-chevron { display: inline-flex; color: var(--ink-muted); transition: transform .15s ease; }
+.ig-disclosure[open] > summary .ig-disclosure-chevron { transform: rotate(90deg); }
+.ig-disclosure-title { font-size: var(--text-title-size); line-height: var(--text-title-line); font-weight: var(--text-title-weight); color: var(--ink); }
+.ig-disclosure-summary { font-size: var(--text-small-size); line-height: var(--text-small-line); color: var(--ink-muted); display: inline-flex; gap: var(--space-2); flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { .ig-disclosure-chevron { transition: none; } }

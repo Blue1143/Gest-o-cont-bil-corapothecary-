@@ -94,9 +94,17 @@ function cmeCounts(period: string): MetricCounts {
   const loads = cycles;
   const retained = poisson(4, r);
   const boxes = 560 + Math.round(r() * 80);
+  const nonConforming = poisson(2, r);
+  const iq = boxes + 40;
+  const reprocessed = poisson(3, r);
   return {
     cme_ciclos: cycles,
-    cme_ciclos_conformes: cycles - poisson(2, r),
+    cme_ciclos_conformes: cycles - nonConforming,
+    cme_ciclos_nao_conformes: nonConforming,
+    cme_iq_lidos: iq,
+    cme_iq_conformes: iq - poisson(1.5, r),
+    cme_cargas_reprocessadas: reprocessed,
+    cme_nao_conformidades: nonConforming + reprocessed + poisson(4, r),
     cme_bd_realizados: bd,
     cme_bd_aprovados: bd - poisson(0.3, r),
     cme_ib_monitorados: days * 2 + 12,

@@ -37,6 +37,14 @@ export function MiniKpiList({ title, subtitle, items }: { title: string; subtitl
   );
 }
 
+/** "2 fora da meta · 1 em atenção" — what a collapsed section hides, in words. */
+export function statusSummary(items: KpiView[]): string {
+  const out = items.filter((k) => k.evaluation.result === 'fora_da_meta').length;
+  const warn = items.filter((k) => k.evaluation.result === 'atencao').length;
+  const parts = [out ? `${out} fora da meta` : null, warn ? `${warn} em atenção` : null].filter(Boolean);
+  return parts.length ? parts.join(' · ') : `${items.length} ${items.length === 1 ? 'indicador' : 'indicadores'} sem alerta de meta`;
+}
+
 /** Honest placeholder for dashboard blocks whose module is not built yet. */
 export function PlannedBlock({ title, phase, children }: { title: string; phase: number; children: string }) {
   return (

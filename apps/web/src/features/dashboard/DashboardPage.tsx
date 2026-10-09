@@ -1,10 +1,11 @@
 import { useId, useMemo } from 'react';
 import { formatDate, formatNumber, monthLongLabel } from '@ccih/domain';
-import { BarChart, ErrorState, KpiCard, LoadingState, ProvenanceTag, TrendChart } from '@ccih/ui';
+import { BarChart, Disclosure, ErrorState, KpiCard, LoadingState, ProvenanceTag, TrendChart } from '@ccih/ui';
+import { NARROW, useMediaQuery } from '../../app/useMediaQuery';
 import { PERIOD_OPTIONS, periodWindow, sectorScope, useGlobalFilters } from '../../app/filters';
 import { useFacts, useInstitution } from '../../data/source';
 import { buildKpi, bundleAdherence, exposure, irasBySector, irasTrend, type DashboardInput } from './model';
-import { MiniKpiList, PlannedBlock, exportCsv } from './parts';
+import { MiniKpiList, PlannedBlock, exportCsv, statusSummary } from './parts';
 
 export function DashboardPage() {
   const institution = useInstitution();
@@ -15,6 +16,7 @@ export function DashboardPage() {
   const from = [win.previous[0]!, history[0]!].sort()[0]!;
   const facts = useFacts({ from, to: win.periods[win.periods.length - 1]! });
   const ids = { period: useId(), unit: useId(), sector: useId() };
+  const narrow = useMediaQuery(NARROW);
 
   if (institution.isPending || facts.isPending) return <div className="page"><LoadingState lines={6} label="Carregando painel…" /></div>;
   if (institution.isError || facts.isError) {
@@ -35,6 +37,10 @@ export function DashboardPage() {
   const bundles = bundleAdherence(input);
   const open = buildKpi('investigacoes-abertas', input);
   const sectorOptions = sectors.filter((s) => !filters.unitId || s.unitId === filters.unitId);
+  const micro = [buildKpi('mdr-incidencia', input, 'Incidência de MDR')];
+  const cme = ['cme-ciclos-conformes', 'cme-bowie-dick', 'cme-iq-conformes', 'cme-ib-negativo', 'cme-cargas-retidas', 'cme-rastreabilidade'].map((id) => buildKpi(id, input));
+  const stewardship = [buildKpi('atm-ddd', input, 'Consumo (DDD/1.000 pac-dia)'), buildKpi('atb-prazo', input), buildKpi('atb-duracao', input)];
+  const processes = [buildKpi('hm-adesao', input), buildKpi('hm-consumo', input), buildKpi('treinamento-cobertura', input)];
 
   return (
     <div className="page">
@@ -138,33 +144,21 @@ export function DashboardPage() {
         />
       </section>
 
-      <section className="cols-3" aria-label="Microbiologia, alertas e não conformidades">
-        <MiniKpiList title="Microbiologia" subtitle="Indicadores agregados do período" items={[buildKpi('mdr-incidencia', input, 'Incidência de MDR')]} />
-        <PlannedBlock title="Alertas" phase={4}>A Central de Alertas (prioridade, responsável, status e controle de alert fatigue) entra na Fase 4.</PlannedBlock>
-        <PlannedBlock title="Não conformidades" phase={4}>Não conformidades e planos de ação vêm do módulo de Auditorias, previsto para a Fase 4.</PlannedBlock>
-      </section>
+      <Disclosure title="Microbiologia, alertas e não conformidades" summary={statusSummary(micro)} defaultOpen={!narrow}>
+        <div className="cols-3">
+          <MiniKpiList title="Microbiologia" subtitle="Indicadores agregados do período" items={micro} />
+          <PlannedBlock title="Alertas" phase={4}>A Central de Alertas (prioridade, responsável, status e controle de alert fatigue) entra na Fase 4.</PlannedBlock>
+          <PlannedBlock title="Não conformidades" phase={4}>Não conformidades e planos de ação vêm do módulo de Auditorias, previsto para a Fase 4.</PlannedBlock>
+        </div>
+      </Disclosure>
 
-      <section className="cols-3" aria-label="CME, antimicrobianos e treinamentos">
-        <MiniKpiList
-          title="CME"
-          subtitle="Esterilização e rastreabilidade"
-          items={[
-            buildKpi('cme-ciclos-conformes', input),
-            buildKpi('cme-bowie-dick', input),
-            buildKpi('cme-ib-negativo', input),
-            buildKpi('cme-cargas-liberadas', input),
-            buildKpi('cme-rastreabilidade', input),
-          ]}
-        />
-        <MiniKpiList
-          title="Antimicrobianos e cirurgia"
-          items={[buildKpi('atm-ddd', input, 'Consumo (DDD/1.000 pac-dia)'), buildKpi('atb-prazo', input), buildKpi('atb-duracao', input)]}
-        />
-        <MiniKpiList
-          title="Processos e treinamentos"
-          items={[buildKpi('hm-adesao', input), buildKpi('hm-consumo', input), buildKpi('treinamento-cobertura', input)]}
-        />
-      </section>
+      <Disclosure title="CME, antimicrobianos e treinamentos" summary={statusSummary([...cme, ...stewardship, ...processes])} defaultOpen={!narrow}>
+        <div className="cols-3">
+          <MiniKpiList title="CME" subtitle="Esterilização e rastreabilidade" items={cme} />
+          <MiniKpiList title="Antimicrobianos e cirurgia" items={stewardship} />
+          <MiniKpiList title="Processos e treinamentos" items={processes} />
+        </div>
+      </Disclosure>
     </div>
   );
 }

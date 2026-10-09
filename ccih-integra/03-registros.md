@@ -1,5 +1,7 @@
 # Registros: prontuário e cirurgia
 
+> **Status: Requer validação institucional.** Conteúdo de apoio, redigido sem conferência com as fontes oficiais vigentes. Fonte declarada: Protocolos institucionais de vigilância e de antibioticoprofilaxia (modelos). Versão: a confirmar. Validado por: —. Atualização: 09/10/2026. No sistema, cada critério, prazo, ponto de corte e meta citados aqui é um parâmetro configurável em Administração, ligado a uma referência com versão, fonte e status, e só vale como regra após validação da CCIH.
+
 ## Registro no prontuário (`PatientRecord`)
 
 O registro da CCIH dentro do prontuário reúne, numa só tela, o que a vigilância ativa precisa revisar diariamente.

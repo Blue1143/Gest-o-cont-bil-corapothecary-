@@ -1,5 +1,7 @@
 # Rastreabilidade de materiais e testes da CME
 
+> **Status: Requer validação institucional.** Conteúdo de apoio, redigido sem conferência com as fontes oficiais vigentes. Fonte declarada: ANVISA — RDC nº 15/2012 e normas de indicadores de esterilização — vigência a confirmar. Versão: a confirmar. Validado por: —. Atualização: 09/10/2026. No sistema, cada critério, prazo, ponto de corte e meta citados aqui é um parâmetro configurável em Administração, ligado a uma referência com versão, fonte e status, e só vale como regra após validação da CCIH.
+
 O processamento de produtos para saúde segue a **RDC ANVISA nº 15/2012** (boas práticas para o processamento de produtos para saúde). O sistema registra cada etapa com data, hora e responsável e mostra a cadeia em `TraceTimeline`.
 
 ## Etapas do ciclo do material

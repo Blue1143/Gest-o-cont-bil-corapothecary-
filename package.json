@@ -3,8 +3,13 @@
   "private": true,
   "description": "CCIH Integra — plataforma de gestão integrada da CCIH/SCIRAS, CME e segurança do paciente.",
   "type": "module",
-  "engines": { "node": ">=22" },
-  "workspaces": ["packages/*", "apps/*"],
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm run dev -w @ccih/web",
     "build": "npm run tokens:check && npm run build --workspaces --if-present",
@@ -23,7 +28,11 @@
     "eslint-plugin-react-hooks": "5.2.0",
     "globals": "16.5.0",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.46.4",
-    "vitest": "3.2.7"
+    "typescript-eslint": "8.71.1",
+    "vite": "6.4.4",
+    "vitest": "4.1.11"
+  },
+  "overrides": {
+    "vite": "6.4.4"
   }
 }

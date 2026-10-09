@@ -1,5 +1,7 @@
 # Treinamentos, processos e insumos
 
+> **Status: Requer validação institucional.** Conteúdo de apoio, redigido sem conferência com as fontes oficiais vigentes. Fonte declarada: Protocolos institucionais de bundles, treinamentos e insumos (modelos). Versão: a confirmar. Validado por: —. Atualização: 09/10/2026. No sistema, cada critério, prazo, ponto de corte e meta citados aqui é um parâmetro configurável em Administração, ligado a uma referência com versão, fonte e status, e só vale como regra após validação da CCIH.
+
 ## Treinamentos (`TrainingProgress`)
 
 Cada tema tem público-alvo, carga horária, validade (reciclagem) e evidência (lista de presença, avaliação). A barra mostra a cobertura com a meta como traço vertical; o selo dá o status.

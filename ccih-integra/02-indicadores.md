@@ -1,5 +1,7 @@
 # Indicadores e KPIs
 
+> **Status: Requer validação institucional.** Conteúdo de apoio, redigido sem conferência com as fontes oficiais vigentes. Fonte declarada: Fórmulas usuais de vigilância epidemiológica de IRAS; metas são exemplos de demonstração. Versão: a confirmar. Validado por: —. Atualização: 09/10/2026. No sistema, cada critério, prazo, ponto de corte e meta citados aqui é um parâmetro configurável em Administração, ligado a uma referência com versão, fonte e status, e só vale como regra após validação da CCIH.
+
 Cada indicador do sistema tem nome, fórmula, unidade, direção (menor ou maior é melhor) e meta institucional. Exiba o valor do período em `KpiCard`, a série histórica em `TrendChart` e a comparação entre setores em `BarChart` ou `DataTable`. As metas abaixo são **exemplos** usados nas prévias; cada instituição define as suas a partir da própria série histórica e dos relatórios nacionais da ANVISA.
 
 ## IRAS associadas a dispositivo (UTIs)

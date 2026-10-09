@@ -1,7 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { CcihDataSource, FactsQuery } from './port';
-import { DemoDataSource } from './demo/DemoDataSource';
 
 export class DataSourceConfigError extends Error {}
 
@@ -9,9 +8,10 @@ export class DataSourceConfigError extends Error {}
  * Picks the data source from VITE_DATA_SOURCE. Production builds must set it explicitly so a
  * deployment never falls back to synthetic data by accident.
  */
-export function createDataSource(env: { VITE_DATA_SOURCE?: string; PROD?: boolean } = import.meta.env): CcihDataSource {
+export async function createDataSource(env: { VITE_DATA_SOURCE?: string; PROD?: boolean } = import.meta.env): Promise<CcihDataSource> {
   const kind = env.VITE_DATA_SOURCE ?? (env.PROD ? undefined : 'demo');
-  if (kind === 'demo') return new DemoDataSource();
+  // Loaded on demand so an institutional build never ships the synthetic generator in its main bundle.
+  if (kind === 'demo') return new (await import('./demo/DemoDataSource')).DemoDataSource();
   if (kind === 'api') throw new DataSourceConfigError('A fonte de dados "api" será habilitada com o backend (Fase 2).');
   throw new DataSourceConfigError('Fonte de dados não configurada. Defina VITE_DATA_SOURCE (veja .env.example).');
 }
