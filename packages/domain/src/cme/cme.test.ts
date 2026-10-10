@@ -116,7 +116,7 @@ describe('CME alerts', () => {
       qualifications: [{ sterilizerId: 's1', name: 'Autoclave 1', dueOn: '2026-10-01', sectorId: 'cme' }, { sterilizerId: 's2', name: 'Autoclave 2', dueOn: '2027-06-01', sectorId: 'cme' }],
     } });
     expect(out.map((a) => [a.kind, a.priority])).toEqual([
-      ['cme_carga_recolhida', 'alta'], ['cme_liberada_com_falha', 'alta'], ['cme_bowie_dick_reprovado', 'alta'], ['cme_ib_leitura_atrasada', 'media'], ['cme_qualificacao', 'alta'],
+      ['cme_carga_recolhida', 'critica'], ['cme_liberada_com_falha', 'critica'], ['cme_bowie_dick_reprovado', 'critica'], ['cme_ib_leitura_atrasada', 'media'], ['cme_qualificacao', 'alta'],
     ]);
     expect(out[0]?.oneShot).toBe(true);
     expect(out[2]?.oneShot).toBeUndefined();

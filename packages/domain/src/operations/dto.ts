@@ -2,7 +2,7 @@ import type { DataOrigin } from '../provenance';
 import type { BundleMethod, StockEvaluation } from '../rules/operations';
 import type { ActionStatus, AuditKind, AuditStatus, NcOrigin, NcSeverity, NcStatus } from './quality';
 import type { BundleMetric, HandHygieneCategory } from './bundles';
-import type { AlertKind, AlertPriority, AlertStatus, FollowupMethod, FollowupOutcome } from './alerts';
+import type { AlertActionKind, AlertCategory, AlertClosedReason, AlertKind, AlertPriority, AlertStatus, FollowupMethod, FollowupOutcome } from './alerts';
 import type { RequiredTraining } from './training';
 import type { MovementKind, SupplyCategory } from './supplies';
 import type { AttachmentDto } from '../cme/dto';
@@ -58,8 +58,13 @@ export interface AlertDto {
   id: string; kind: AlertKind; priority: AlertPriority; status: AlertStatus; title: string; detail: string; entity: string; entityId: string | null;
   sectorId: string | null; createdAt: string; lastSeenAt: string; assignedName: string | null; assignedAt: string | null; closedAt: string | null;
   closedByName: string | null; resolution: string | null; rowVersion: number; link: string | null;
+  category: AlertCategory; blocking: boolean; step: string | null; dueOn: string | null; unitId: string | null;
+  acknowledgedName: string | null; acknowledgedAt: string | null; resolvedName: string | null; resolvedAt: string | null; resolvedNote: string | null;
+  closedReason: AlertClosedReason | null;
 }
-export interface AlertSummary { open: number; byPriority: Record<AlertPriority, number>; assignedToMe: number }
+export interface AlertActionDto { id: string; action: AlertActionKind; userName: string; note: string | null; at: string }
+export interface AlertDetail extends AlertDto { actions: AlertActionDto[] }
+export interface AlertSummary { open: number; byPriority: Record<AlertPriority, number>; assignedToMe: number; blocking: number }
 
 export interface TrainingDto {
   id: string; title: string; theme: string; mandatory: boolean; validityMonths: number | null; targetJobRoleIds: string[]; description: string | null;

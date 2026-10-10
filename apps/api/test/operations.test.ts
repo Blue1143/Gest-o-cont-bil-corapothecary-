@@ -227,12 +227,53 @@ describe('operational consolidation', () => {
 
 describe('alert generation under concurrency', () => {
   it('lets a list requested together with the counter see the generated alerts', async () => {
-    await ctx.db.updateTable('alert').set({ status: 'encerrado', closed_at: new Date(), closed_by_name: 'Teste', resolution: 'Limpeza para o teste de concorrência' }).where('status', '<>', 'encerrado').execute();
+    await ctx.db.updateTable('alert').set({ status: 'encerrado', closed_at: new Date(), closed_by_name: 'Teste', resolution: 'Limpeza para o teste de concorrência', closed_reason: 'manual' }).where('status', '<>', 'encerrado').execute();
     await ctx.db.updateTable('alert').set({ closed_at: new Date(Date.now() - 400 * 86_400_000) }).execute().catch(() => undefined);
     const { resetAlertThrottle } = await import('../src/services/alerts');
     resetAlertThrottle(ctx.institutionId);
     const [summary, list] = await Promise.all([api(enf, 'GET', '/alerts/summary'), api(enf, 'GET', '/alerts?pageSize=100')]);
     expect(summary.json().open).toBeGreaterThan(0);
     expect(list.json().total).toBe(summary.json().open);
+  });
+});
+
+describe('alert lifecycle (v2)', () => {
+  it('acknowledges, assumes, comments, resolves and closes, keeping the history; viewing changes nothing', async () => {
+    const { resetAlertThrottle } = await import('../src/services/alerts');
+    resetAlertThrottle(ctx.institutionId);
+    const list = (await api(enf, 'GET', '/alerts?status=aberto&pageSize=100')).json().rows as Array<{ id: string; rowVersion: number; blocking: boolean; category: string; unitId: string | null; sectorId: string | null }>;
+    const a = list.find((x) => !x.blocking && x.sectorId)!;
+    expect(a).toBeTruthy();
+    expect(a.unitId).toBeTruthy();
+    expect((await api(enf, 'GET', `/alerts?unitId=${a.unitId}&pageSize=100`)).json().rows.some((x: { id: string }) => x.id === a.id)).toBe(true);
+    expect((await api(enf, 'GET', `/alerts?sectorId=${a.sectorId}&category=${a.category}&pageSize=100`)).json().rows.some((x: { id: string }) => x.id === a.id)).toBe(true);
+    expect((await api(enf, 'GET', '/alerts?from=2000-01-01&to=2000-01-02')).json().total).toBe(0);
+
+    const viewed = (await api(enf, 'GET', `/alerts/${a.id}`)).json();
+    expect(viewed.status).toBe('aberto');
+    expect(viewed.rowVersion).toBe(a.rowVersion);
+    await api(enf, 'GET', `/alerts/${a.id}`);
+
+    let v = a.rowVersion;
+    const step = async (path: string, body: object = {}) => {
+      const res = await api(enf, 'POST', `/alerts/${a.id}/${path}`, { ...body, rowVersion: v });
+      expect(res.statusCode, res.body).toBe(200);
+      v = res.json().rowVersion ?? v;
+    };
+    await step('acknowledge');
+    expect((await api(enf, 'POST', `/alerts/${a.id}/acknowledge`, { rowVersion: v })).statusCode).toBe(409);
+    await step('assume');
+    expect((await api(enf, 'POST', `/alerts/${a.id}/comments`, { note: 'Contato com o setor feito por telefone' })).statusCode).toBe(201);
+    expect((await api(enf, 'POST', `/alerts/${a.id}/resolve`, { note: 'curto', rowVersion: v })).statusCode).toBe(400);
+    await step('resolve', { note: 'Registro corrigido no prontuário do setor' });
+    expect((await api(enf, 'POST', `/alerts/${a.id}/exception`, { note: 'Não se aplica a este alerta', rowVersion: v })).statusCode).toBe(409);
+    expect((await api(enf, 'POST', `/alerts/${a.id}/close`, { resolution: 'Conferido com a enfermagem do setor', rowVersion: v })).statusCode).toBe(200);
+
+    const detail = (await api(enf, 'GET', `/alerts/${a.id}`)).json();
+    expect(detail).toMatchObject({ status: 'encerrado', closedReason: 'manual', acknowledgedName: expect.any(String), resolvedNote: 'Registro corrigido no prontuário do setor' });
+    expect(detail.actions.map((x: { action: string }) => x.action)).toEqual(['criado', 'visualizado', 'reconhecido', 'assumido', 'comentado', 'resolvido', 'encerrado']);
+    expect((await api(auditor, 'POST', `/alerts/${a.id}/comments`, { note: 'Sem permissão' })).statusCode).toBe(403);
+    // The history cannot be rewritten.
+    await expect(ctx.db.updateTable('alert_action').set({ note: 'alterado' }).where('alert_id', '=', a.id).execute()).rejects.toThrow();
   });
 });

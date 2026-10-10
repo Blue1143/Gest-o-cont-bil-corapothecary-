@@ -1,4 +1,4 @@
-import { dayDiff, type IsoDate } from '../dates';
+import { addDays, dayDiff, type IsoDate } from '../dates';
 import type { Permission } from '../permissions';
 import type { StockEvaluation } from '../rules/operations';
 
@@ -12,8 +12,12 @@ export type AlertKind =
   | 'insumo_critico' | 'plano_acao_atrasado' | 'isc_contato_pendente'
   | 'cme_carga_recolhida' | 'cme_uso_sem_saida' | 'cme_liberada_com_falha' | 'cme_bowie_dick_reprovado' | 'cme_ib_leitura_atrasada' | 'cme_qualificacao';
 
-export type AlertPriority = 'alta' | 'media' | 'baixa';
-export type AlertStatus = 'aberto' | 'assumido' | 'encerrado';
+/** Severity (kept under the historical name "priority"). */
+export type AlertPriority = 'critica' | 'alta' | 'media' | 'baixa';
+export type AlertStatus = 'aberto' | 'reconhecido' | 'assumido' | 'resolvido' | 'encerrado';
+export type AlertCategory = 'erro_operacional' | 'violacao_sequencia' | 'pendencia_tempo' | 'falha_integracao' | 'informacao_obrigatoria' | 'nao_conformidade' | 'seguranca';
+export type AlertClosedReason = 'manual' | 'automatico' | 'excecao';
+export type AlertActionKind = 'criado' | 'visualizado' | 'reconhecido' | 'assumido' | 'comentado' | 'resolvido' | 'encerrado' | 'encerrado_automatico' | 'excecao';
 
 export const ALERT_KIND_LABEL: Record<AlertKind, string> = {
   iras_investigacao_atrasada: 'Investigação de IRAS sem conclusão',
@@ -30,8 +34,51 @@ export const ALERT_KIND_LABEL: Record<AlertKind, string> = {
   cme_ib_leitura_atrasada: 'Indicador biológico sem leitura no prazo',
   cme_qualificacao: 'Qualificação de equipamento da CME',
 };
-export const ALERT_PRIORITY_LABEL: Record<AlertPriority, string> = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
-export const ALERT_STATUS_LABEL: Record<AlertStatus, string> = { aberto: 'Aberto', assumido: 'Assumido', encerrado: 'Encerrado' };
+export const ALERT_PRIORITY_LABEL: Record<AlertPriority, string> = { critica: 'Crítica', alta: 'Alta', media: 'Média', baixa: 'Baixa' };
+export const ALERT_PRIORITY_ORDER: AlertPriority[] = ['critica', 'alta', 'media', 'baixa'];
+export const ALERT_STATUS_LABEL: Record<AlertStatus, string> = { aberto: 'Aberto', reconhecido: 'Reconhecido', assumido: 'Assumido', resolvido: 'Resolvido', encerrado: 'Encerrado' };
+export const ALERT_CATEGORY_LABEL: Record<AlertCategory, string> = {
+  erro_operacional: 'Erro operacional', violacao_sequencia: 'Violação de sequência', pendencia_tempo: 'Pendência de tempo', falha_integracao: 'Falha de integração',
+  informacao_obrigatoria: 'Informação obrigatória ausente', nao_conformidade: 'Não conformidade', seguranca: 'Segurança do paciente',
+};
+export const ALERT_CLOSED_REASON_LABEL: Record<AlertClosedReason, string> = { manual: 'Encerrado manualmente', automatico: 'Condição resolvida no registro de origem', excecao: 'Exceção formal autorizada' };
+export const ALERT_ACTION_LABEL: Record<AlertActionKind, string> = {
+  criado: 'Criado', visualizado: 'Visualizado', reconhecido: 'Reconhecido', assumido: 'Assumido', comentado: 'Comentário', resolvido: 'Resolvido',
+  encerrado: 'Encerrado', encerrado_automatico: 'Encerrado automaticamente', excecao: 'Exceção formal',
+};
+
+/** Category of each kind (stored on the alert so it can be filtered). */
+export const ALERT_KIND_CATEGORY: Record<AlertKind, AlertCategory> = {
+  iras_investigacao_atrasada: 'pendencia_tempo', dispositivo_prolongado: 'pendencia_tempo', mdr_novo: 'seguranca', treinamento_vencido: 'pendencia_tempo',
+  insumo_critico: 'seguranca', plano_acao_atrasado: 'nao_conformidade', isc_contato_pendente: 'pendencia_tempo',
+  cme_carga_recolhida: 'seguranca', cme_uso_sem_saida: 'violacao_sequencia', cme_liberada_com_falha: 'seguranca', cme_bowie_dick_reprovado: 'seguranca',
+  cme_ib_leitura_atrasada: 'pendencia_tempo', cme_qualificacao: 'pendencia_tempo',
+};
+
+/**
+ * Blocking (safety) alerts cannot be closed by hand while their condition persists: the way out is to
+ * fix the cause in the record (the alert then closes by itself) or a formal exception (alerts:exception).
+ */
+export const ALERT_KIND_BLOCKING: Record<AlertKind, boolean> = {
+  iras_investigacao_atrasada: false, dispositivo_prolongado: false, mdr_novo: false, treinamento_vencido: false, insumo_critico: false, plano_acao_atrasado: false,
+  isc_contato_pendente: false, cme_carga_recolhida: false, cme_uso_sem_saida: false, cme_liberada_com_falha: true, cme_bowie_dick_reprovado: true,
+  cme_ib_leitura_atrasada: false, cme_qualificacao: false,
+};
+
+/** Statuses still requiring work (everything but closed). */
+export const ALERT_OPEN_STATUSES: AlertStatus[] = ['aberto', 'reconhecido', 'assumido', 'resolvido'];
+
+/** What a user may do next on an alert (the API enforces the same rules). */
+export function alertActions(a: { status: AlertStatus; blocking: boolean }): { acknowledge: boolean; assume: boolean; resolve: boolean; close: boolean; exception: boolean } {
+  const open = a.status !== 'encerrado';
+  return {
+    acknowledge: a.status === 'aberto',
+    assume: a.status === 'aberto' || a.status === 'reconhecido',
+    resolve: open && a.status !== 'resolvido',
+    close: open && !a.blocking,
+    exception: open && a.blocking,
+  };
+}
 
 /** Who may see each kind of alert (besides alerts:view). */
 export const ALERT_KIND_PERMISSION: Record<AlertKind, Permission> = {
@@ -51,6 +98,10 @@ export interface AlertCandidate {
   sectorId: string | null;
   /** Screen where the alert is handled. */
   link: string | null;
+  /** Deadline (institution date) that was or will be missed, when the alert is about time. */
+  dueOn?: IsoDate | null;
+  /** CME process step concerned, when there is one. */
+  step?: string | null;
   /**
    * An event (not a lasting condition): once an alert with this key is closed it is never
    * recreated, even after the suppression window, while the event is still recent.
@@ -96,7 +147,7 @@ export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
   if (overdue != null) {
     for (const c of input.openCases) {
       const days = dayDiff(c.openedOn, input.today);
-      if (days >= overdue) out.push({ kind: 'iras_investigacao_atrasada', dedupKey: `iras:${c.id}`, priority: 'alta', title: `${c.typeLabel} em aberto há ${days} dias`, detail: `Paciente ${c.patientLabel}. Limite institucional: ${overdue} dias.`, entity: 'iras_case', entityId: c.id, sectorId: c.sectorId, link: `/vigilancia/${c.id}` });
+      if (days >= overdue) out.push({ kind: 'iras_investigacao_atrasada', dedupKey: `iras:${c.id}`, dueOn: addDays(c.openedOn, overdue), priority: 'alta', title: `${c.typeLabel} em aberto há ${days} dias`, detail: `Paciente ${c.patientLabel}. Limite institucional: ${overdue} dias.`, entity: 'iras_case', entityId: c.id, sectorId: c.sectorId, link: `/vigilancia/${c.id}` });
     }
   }
   if (review != null) {
@@ -117,30 +168,30 @@ export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
     out.push({ kind: 'insumo_critico', dedupKey: `insumo:${s.id}:${s.evaluation.label}`, priority: s.evaluation.coverage === 'indisponivel' ? 'alta' : 'media', title: `${s.name}: ${s.evaluation.label}`, detail: s.evaluation.coverageDays != null ? `Cobertura estimada de ${Math.floor(s.evaluation.coverageDays)} dia(s).` : 'Sem consumo registrado nos últimos 30 dias.', entity: 'supply', entityId: s.id, sectorId: null, link: '/insumos' });
   }
   for (const a of input.overdueActions) {
-    out.push({ kind: 'plano_acao_atrasado', dedupKey: `acao:${a.id}`, priority: 'media', title: `Ação atrasada: ${a.what.slice(0, 80)}`, detail: `Prazo ${a.dueOn.split('-').reverse().join('/')}.`, entity: 'action_plan', entityId: a.id, sectorId: a.sectorId, link: `/auditorias/nao-conformidades/${a.ncId}` });
+    out.push({ kind: 'plano_acao_atrasado', dedupKey: `acao:${a.id}`, dueOn: a.dueOn, priority: 'media', title: `Ação atrasada: ${a.what.slice(0, 80)}`, detail: `Prazo ${a.dueOn.split('-').reverse().join('/')}.`, entity: 'action_plan', entityId: a.id, sectorId: a.sectorId, link: `/auditorias/nao-conformidades/${a.ncId}` });
   }
   for (const f of input.pendingFollowups) {
-    out.push({ kind: 'isc_contato_pendente', dedupKey: `isc:${f.surgeryId}`, priority: 'baixa', title: `${f.procedure}: sem contato pós-alta`, detail: `Paciente ${f.patientLabel}. Janela de vigilância até ${f.windowEnd.split('-').reverse().join('/')}.`, entity: 'surgery', entityId: f.surgeryId, sectorId: null, link: `/cirurgias/${f.surgeryId}` });
+    out.push({ kind: 'isc_contato_pendente', dedupKey: `isc:${f.surgeryId}`, dueOn: f.windowEnd, priority: 'baixa', title: `${f.procedure}: sem contato pós-alta`, detail: `Paciente ${f.patientLabel}. Janela de vigilância até ${f.windowEnd.split('-').reverse().join('/')}.`, entity: 'surgery', entityId: f.surgeryId, sectorId: null, link: `/cirurgias/${f.surgeryId}` });
   }
   if (input.cme) {
     for (const l of input.cme.recalledLoads) {
       const exposure = l.surgeries ? `${l.patients} paciente(s) em ${l.surgeries} cirurgia(s) receberam material da carga: avaliar com a CCIH a necessidade de vigilância.` : 'Nenhum material desta carga foi registrado em uso.';
-      out.push({ kind: 'cme_carga_recolhida', oneShot: true, dedupKey: `recolhe:${l.loadId}`, priority: l.surgeries ? 'alta' : 'media', title: `Carga ${l.code} recolhida`, detail: exposure, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });
+      out.push({ kind: 'cme_carga_recolhida', oneShot: true, dedupKey: `recolhe:${l.loadId}`, priority: l.surgeries ? 'critica' : 'media', title: `Carga ${l.code} recolhida`, detail: exposure, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });
     }
     for (const u of input.cme.usesWithoutExit ?? []) {
-      out.push({ kind: 'cme_uso_sem_saida', oneShot: true, dedupKey: `semsaida:${u.useId}`, priority: 'media', title: `Pacote ${u.labelCode} usado sem saída do CME`, detail: `Uso em ${u.usedOn.split('-').reverse().join('/')}. O uso não foi bloqueado: foi aberta uma não conformidade e quem registrou o uso foi notificado. Revise com a expedição por que a saída não foi lida.`, entity: 'cme_process', entityId: u.processId, sectorId: u.sectorId, link: `/cme/processos/${u.processId}` });
+      out.push({ kind: 'cme_uso_sem_saida', oneShot: true, dedupKey: `semsaida:${u.useId}`, step: 'distribuicao', priority: 'media', title: `Pacote ${u.labelCode} usado sem saída do CME`, detail: `Uso em ${u.usedOn.split('-').reverse().join('/')}. O uso não foi bloqueado: foi aberta uma não conformidade e quem registrou o uso foi notificado. Revise com a expedição por que a saída não foi lida.`, entity: 'cme_process', entityId: u.processId, sectorId: u.sectorId, link: `/cme/processos/${u.processId}` });
     }
     for (const l of input.cme.releasedWithFailure) {
-      out.push({ kind: 'cme_liberada_com_falha', dedupKey: `falha:${l.loadId}`, priority: 'alta', title: `Carga ${l.code} liberada com teste reprovado`, detail: `${l.reason} Avaliar o recolhimento dos pacotes e a exposição de pacientes.`, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });
+      out.push({ kind: 'cme_liberada_com_falha', dedupKey: `falha:${l.loadId}`, priority: 'critica', step: 'liberacao', title: `Carga ${l.code} liberada com teste reprovado`, detail: `${l.reason} Avaliar o recolhimento dos pacotes e a exposição de pacientes.`, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });
     }
     for (const b of input.cme.failedBowieDick) {
-      out.push({ kind: 'cme_bowie_dick_reprovado', dedupKey: `bd:${b.sterilizerId}:${input.today}`, priority: 'alta', title: `${b.name}: Bowie-Dick reprovado hoje`, detail: 'Bloquear o equipamento (manutenção) ou repetir o teste com aprovação antes de novas cargas.', entity: 'sterilizer', entityId: b.sterilizerId, sectorId: b.sectorId, link: '/cme/equipamentos' });
+      out.push({ kind: 'cme_bowie_dick_reprovado', dedupKey: `bd:${b.sterilizerId}:${input.today}`, priority: 'critica', step: 'esterilizacao', title: `${b.name}: Bowie-Dick reprovado hoje`, detail: 'Bloquear o equipamento (manutenção) ou repetir o teste com aprovação antes de novas cargas.', entity: 'sterilizer', entityId: b.sterilizerId, sectorId: b.sectorId, link: '/cme/equipamentos' });
     }
     const limit = input.rules.ibReadingHours;
     if (limit != null) {
       for (const t of input.cme.pendingIb) {
         if (t.hours < limit) continue;
-        out.push({ kind: 'cme_ib_leitura_atrasada', dedupKey: `ib:${t.testId}`, priority: 'media', title: `Carga ${t.loadCode}: indicador biológico sem leitura há ${Math.floor(t.hours)} h`, detail: `Prazo institucional: ${limit} h após o início da incubação.`, entity: 'sterilization_test', entityId: t.testId, sectorId: t.sectorId, link: `/cme/cargas/${t.loadId}` });
+        out.push({ kind: 'cme_ib_leitura_atrasada', dedupKey: `ib:${t.testId}`, step: 'liberacao', priority: 'media', title: `Carga ${t.loadCode}: indicador biológico sem leitura há ${Math.floor(t.hours)} h`, detail: `Prazo institucional: ${limit} h após o início da incubação.`, entity: 'sterilization_test', entityId: t.testId, sectorId: t.sectorId, link: `/cme/cargas/${t.loadId}` });
       }
     }
     const warn = input.rules.qualificationWarningDays;
@@ -148,7 +199,7 @@ export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
       for (const q of input.cme.qualifications) {
         const days = dayDiff(input.today, q.dueOn);
         if (days > warn) continue;
-        out.push({ kind: 'cme_qualificacao', dedupKey: `qualif:${q.sterilizerId}:${q.dueOn}`, priority: days < 0 ? 'alta' : 'baixa', title: days < 0 ? `${q.name}: qualificação vencida` : `${q.name}: qualificação vence em ${days} dia(s)`, detail: `Vencimento em ${q.dueOn.split('-').reverse().join('/')}.`, entity: 'sterilizer', entityId: q.sterilizerId, sectorId: q.sectorId, link: '/cme/equipamentos' });
+        out.push({ kind: 'cme_qualificacao', dedupKey: `qualif:${q.sterilizerId}:${q.dueOn}`, dueOn: q.dueOn, priority: days < 0 ? 'alta' : 'baixa', title: days < 0 ? `${q.name}: qualificação vencida` : `${q.name}: qualificação vence em ${days} dia(s)`, detail: `Vencimento em ${q.dueOn.split('-').reverse().join('/')}.`, entity: 'sterilizer', entityId: q.sterilizerId, sectorId: q.sectorId, link: '/cme/equipamentos' });
       }
     }
   }

@@ -155,3 +155,4 @@ a { color: var(--primary); }
 .scan-code { white-space: nowrap; }
 .bell-link { position: relative; gap: 4px; }
 .inbox-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.alert-item.alert-blocking { border-color: var(--crit); border-left-width: 4px; }

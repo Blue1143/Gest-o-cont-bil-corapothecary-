@@ -25,6 +25,7 @@ export function AppShell() {
   const demo = source.origin === 'demo' || institution.data?.provenance.origin === 'demo';
   const roles = (session.info?.roles ?? []).map((r) => ROLE_LABEL[r as RoleCode] ?? r).join(', ');
   const alertCount = useAlertCount();
+  const urgent = (alertCount.data?.byPriority.critica ?? 0) + (alertCount.data?.byPriority.alta ?? 0);
   const unread = useUnreadNotifications().data?.unread ?? 0;
   const forced = !!session.info?.mustChangePassword;
   const groups = (forced ? [] : NAVIGATION).map((g) => ({ ...g, items: g.items.filter((i) => session.can(...i.permissions)) })).filter((g) => g.items.length);
@@ -77,7 +78,7 @@ export function AppShell() {
                     <NavLink to={item.path} end={item.path === '/'} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
                       <span>{item.label}</span>
                       {item.phase ? <span className="nav-phase"><span className="ig-sr-only"> — em desenvolvimento, </span>Fase {item.phase}</span> : null}
-                      {item.path === '/alertas' && alertCount.data?.byPriority.alta ? <span className="nav-count" title="Alertas abertos de prioridade alta"><span className="ig-sr-only"> — </span>{alertCount.data.byPriority.alta}<span className="ig-sr-only"> de prioridade alta</span></span> : null}
+                      {item.path === '/alertas' && urgent ? <span className="nav-count" title="Alertas abertos de gravidade crítica ou alta"><span className="ig-sr-only"> — </span>{urgent}<span className="ig-sr-only"> de gravidade crítica ou alta</span></span> : null}
                     </NavLink>
                   </li>
                 ))}

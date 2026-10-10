@@ -6,6 +6,7 @@ import * as m0003 from './migrations/0003_operations';
 import * as m0004 from './migrations/0004_cme';
 import * as m0005 from './migrations/0005_cme_flow';
 import * as m0006 from './migrations/0006_cme_exit_nc';
+import * as m0007 from './migrations/0007_alerts_v2';
 
 /** Migrations are registered statically (works the same under tsx, tests and the bundled build). */
 const MIGRATIONS: Record<string, Migration> = {
@@ -15,12 +16,13 @@ const MIGRATIONS: Record<string, Migration> = {
   '0004_cme': m0004,
   '0005_cme_flow': m0005,
   '0006_cme_exit_nc': m0006,
+  '0007_alerts_v2': m0007,
 };
 
 export const APPEND_ONLY_TABLES = [
   'iras_case_status', 'ccih_note', 'culture_result', 'isolate', 'susceptibility',
   'quality_audit_status', 'nonconformity_status', 'supply_movement', 'ssi_followup', 'bundle_audit_answer',
-  'load_item', 'sterilization_test', 'load_release_decision', 'attachment', 'cme_scan_event',
+  'load_item', 'sterilization_test', 'load_release_decision', 'attachment', 'cme_scan_event', 'alert_action',
 ] as const;
 
 const provider: MigrationProvider = { getMigrations: async () => MIGRATIONS };

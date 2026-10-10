@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { DEFAULT_ROLE_PERMISSIONS, type AlertDto, type BundleTemplateDto, type RoleCode } from '@ccih/domain';
+import { DEFAULT_ROLE_PERMISSIONS, type AlertDetail, type AlertDto, type BundleTemplateDto, type RoleCode } from '@ccih/domain';
 import { DemoDataSource } from '../../data/demo/DemoDataSource';
 import { DataSourceProvider } from '../../data/source';
 import type { AuthPort, CcihDataSource, ClinicalPort, OperationsPort } from '../../data/port';
@@ -14,7 +14,13 @@ import { passwordHint } from '../auth/AccountPage';
 const ALERT: AlertDto = {
   id: 'a1', kind: 'insumo_critico', priority: 'alta', status: 'aberto', title: 'Respirador N95: Ruptura iminente', detail: 'Cobertura estimada de 2 dia(s).', entity: 'supply', entityId: 's1',
   sectorId: null, createdAt: '2026-10-09T10:00:00Z', lastSeenAt: '2026-10-09T10:00:00Z', assignedName: null, assignedAt: null, closedAt: null, closedByName: null, resolution: null, rowVersion: 1, link: '/insumos',
+  category: 'seguranca', blocking: false, step: null, dueOn: null, unitId: null, acknowledgedName: null, acknowledgedAt: null, resolvedName: null, resolvedAt: null, resolvedNote: null, closedReason: null,
 };
+const BLOCKING: AlertDto = {
+  ...ALERT, id: 'b1', kind: 'cme_bowie_dick_reprovado', priority: 'critica', title: 'Autoclave 2: Bowie-Dick reprovado hoje', detail: 'Bloquear o equipamento ou repetir o teste.', entity: 'sterilizer', entityId: 'st2',
+  link: '/cme/equipamentos', blocking: true, step: 'esterilizacao',
+};
+const BLOCKING_DETAIL: AlertDetail = { ...BLOCKING, actions: [{ id: 'x1', action: 'criado', userName: 'Sistema', note: null, at: '2026-10-09T10:00:00Z' }] };
 const TEMPLATE: BundleTemplateDto = {
   id: 't1', code: 'bundle-cvc', name: 'Manutenção de CVC (modelo)', metric: 'cvc', method: 'tudo_ou_nada', referenceId: null, active: true, rowVersion: 1,
   items: [{ id: 'i1', position: 0, label: 'Higiene das mãos antes do manuseio' }, { id: 'i2', position: 1, label: 'Curativo íntegro' }],
@@ -30,8 +36,13 @@ function fakeSource(role: RoleCode, mustChangePassword = false) {
     changePassword: vi.fn(async () => { must = false; }),
   };
   const operations = {
-    alerts: vi.fn(async () => ({ rows: [ALERT], total: 1, page: 1, pageSize: 25 })),
-    alertSummary: vi.fn(async () => ({ open: 1, byPriority: { alta: 1, media: 0, baixa: 0 }, assignedToMe: 0 })),
+    alerts: vi.fn(async () => ({ rows: [ALERT, BLOCKING], total: 2, page: 1, pageSize: 25 })),
+    alert: vi.fn(async () => BLOCKING_DETAIL),
+    acknowledgeAlert: vi.fn(async () => undefined),
+    alertException: vi.fn(async () => undefined),
+    resolveAlert: vi.fn(async () => undefined),
+    commentAlert: vi.fn(async () => undefined),
+    alertSummary: vi.fn(async () => ({ open: 1, byPriority: { critica: 0, alta: 1, media: 0, baixa: 0 }, assignedToMe: 0, blocking: 0 })),
     closeAlert: vi.fn(async () => undefined),
     assumeAlert: vi.fn(async () => undefined),
     bundleTemplates: vi.fn(async () => ({ templates: [TEMPLATE] })),
@@ -63,7 +74,7 @@ describe('alert center', () => {
     const user = userEvent.setup();
     const { source, operations } = fakeSource('enf_ccih');
     renderAt(source, '/alertas');
-    expect(await screen.findByRole('link', { name: 'Respirador N95: Ruptura iminente' })).toHaveAttribute('href', '/insumos');
+    expect(await screen.findByRole('link', { name: 'Respirador N95: Ruptura iminente' })).toHaveAttribute('href', '/alertas/a1');
     const nav = screen.getByRole('navigation', { name: 'Principal' });
     expect(await within(nav).findByText('1', { selector: '.nav-count' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Encerrar: Respirador/ }));
@@ -80,7 +91,38 @@ describe('alert center', () => {
     const { source } = fakeSource('auditor');
     renderAt(source, '/alertas');
     expect(await screen.findByText('Respirador N95: Ruptura iminente')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Encerrar|Assumir/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Encerrar|Assumir|Reconhecer/ })).toBeNull();
+  });
+
+  it('never offers manual closing of a blocking alert in the list', async () => {
+    const { source } = fakeSource('enf_ccih');
+    renderAt(source, '/alertas');
+    expect(await screen.findByText('Bloqueante')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Encerrar: Autoclave 2/ })).toBeNull();
+    expect(screen.getByRole('link', { name: /Tratar: Autoclave 2/ })).toHaveAttribute('href', '/alertas/b1');
+    expect(screen.getByRole('button', { name: /Reconhecer: Autoclave 2/ })).toBeInTheDocument();
+  });
+
+  it('closes a blocking alert only through a justified formal exception, for profiles allowed to', async () => {
+    const user = userEvent.setup();
+    const { source, operations } = fakeSource('enf_ccih');
+    renderAt(source, '/alertas/b1');
+    expect(await screen.findByText('Alerta bloqueante')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Encerrar' })).toBeNull();
+    expect(screen.getByText('Criado — Sistema')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Exceção formal…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Exceção formal' });
+    await user.type(within(dialog).getByLabelText(/Justificativa da exceção/), 'Ciclo de emergência autorizado pela CCIH');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar exceção e encerrar' }));
+    expect(operations.alertException).toHaveBeenCalledWith('b1', 'Ciclo de emergência autorizado pela CCIH', 1);
+  });
+
+  it('hides the formal exception from profiles without alerts:exception', async () => {
+    const { source } = fakeSource('cme');
+    renderAt(source, '/alertas/b1');
+    expect(await screen.findByText('Alerta bloqueante')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Registrar resolução' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Exceção formal…' })).toBeNull();
   });
 });
 

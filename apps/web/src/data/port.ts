@@ -1,7 +1,7 @@
 import type {
   CensusMonthPayload, CensusPayload, CultureDetail, CultureSummary, DataOrigin, FactRow, InstitutionData, InvestigationStatus, IrasCaseDetail, IrasCaseSummary,
   MetricKey, OrgPayload, Paged, PatientDetail, PatientSummary, Permission, Procedure, Professional, SterilizationTestType, SurgeryDetail, SurgerySummary, WithProvenance,
-  AlertDto, AlertSummary, BundleAuditDto, BundleSummary, BundleTemplateDto, HandHygieneDto, HandHygieneSummaryRow, NonconformityDetail, NonconformityDto,
+  AlertDetail, AlertDto, AlertSummary, BundleAuditDto, BundleSummary, BundleTemplateDto, HandHygieneDto, HandHygieneSummaryRow, NonconformityDetail, NonconformityDto,
   QualityAuditDetail, QualityAuditDto, StaffMember, SupplyDto, SupplyMovementDto, SurveillanceRow, TrainingCoveragePayload, TrainingDto, TrainingSessionDto,
   AttachmentDto, CmeOverview, CmeTestDto, EquipmentStatus, IbControl, InstrumentSetDto, LoadDetail, LoadStatus, LoadSummary, PackagingType, RecordedTestType,
   SterilizerDto, SterilizerType, TestResult, TraceResult,
@@ -248,6 +248,11 @@ export interface OperationsPort {
   refreshAlerts(): Promise<{ created: number; resolved: number }>;
   assumeAlert(id: string, rowVersion: number): Promise<void>;
   closeAlert(id: string, resolution: string, rowVersion: number): Promise<void>;
+  alert(id: string): Promise<AlertDetail>;
+  acknowledgeAlert(id: string, rowVersion: number): Promise<void>;
+  resolveAlert(id: string, note: string, rowVersion: number): Promise<void>;
+  alertException(id: string, note: string, rowVersion: number): Promise<void>;
+  commentAlert(id: string, note: string): Promise<void>;
   staff(): Promise<{ staff: StaffMember[]; jobRoles: Array<{ id: string; name: string }> }>;
   createStaff(input: Justified & { name: string; registration: string | null; jobRoleId: string; sectorId: string }): Promise<void>;
   trainings(): Promise<{ trainings: TrainingDto[]; sessions: TrainingSessionDto[] }>;

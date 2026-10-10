@@ -162,7 +162,7 @@ describe('use of packages and traceability', () => {
     resetAlertThrottle(ctx.institutionId);
     const rows = (await api(enf, 'GET', '/alerts?kind=cme_carga_recolhida&pageSize=100')).json().rows as Array<{ id: string; entityId: string; detail: string; rowVersion: number; priority: string }>;
     const alert = rows.find((a) => a.entityId === releasedLoad)!;
-    expect(alert).toMatchObject({ priority: 'alta' });
+    expect(alert).toMatchObject({ priority: 'critica', category: 'seguranca', blocking: false });
     expect(alert.detail).toMatch(/1 paciente\(s\) em 1 cirurgia/);
     expect((await api(cme, 'POST', `/alerts/${alert.id}/close`, { resolution: 'Pacotes recolhidos e CCIH comunicada', rowVersion: alert.rowVersion })).statusCode).toBe(200);
     // Past the suppression window, an event alert still does not come back.
@@ -187,7 +187,28 @@ describe('equipment', () => {
     expect(bd.statusCode).toBe(201);
     resetAlertThrottle(ctx.institutionId);
     const kinds = (await api(cme, 'GET', '/alerts?kind=cme_bowie_dick_reprovado')).json().rows;
-    expect(kinds.some((a: { entityId: string }) => a.entityId === av2.id)).toBe(true);
+    const bdAlert = kinds.find((a: { entityId: string }) => a.entityId === av2.id);
+    expect(bdAlert).toMatchObject({ priority: 'critica', blocking: true, category: 'seguranca', step: 'esterilizacao' });
+    // Blocking: no manual closing while the failed test is the latest of the day and the equipment is in use.
+    const refused = await api(cme, 'POST', `/alerts/${bdAlert.id}/close`, { resolution: 'Teste repetido mais tarde', rowVersion: bdAlert.rowVersion });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().message).toMatch(/bloqueante/);
+    // The formal exception needs its own permission (not given to the CME profile by default).
+    expect((await api(cme, 'POST', `/alerts/${bdAlert.id}/exception`, { note: 'Equipamento usado só para carga de emergência', rowVersion: bdAlert.rowVersion })).statusCode).toBe(403);
+    expect((await api(cme, 'GET', '/alerts?blocking=1&priority=critica&category=seguranca')).json().rows.some((a: { id: string }) => a.id === bdAlert.id)).toBe(true);
+    expect((await api(cme, 'GET', '/alerts?category=pendencia_tempo')).json().rows.some((a: { id: string }) => a.id === bdAlert.id)).toBe(false);
+    const summary = (await api(cme, 'GET', '/alerts/summary')).json();
+    expect(summary.blocking).toBeGreaterThanOrEqual(1);
+    expect(summary.byPriority.critica).toBeGreaterThanOrEqual(1);
+    // CCIH (alerts:exception) can accept the risk formally: the alert closes and is not raised again.
+    const exc = await api(enf, 'POST', `/alerts/${bdAlert.id}/exception`, { note: 'Ciclo de emergência autorizado pela CCIH e RT da CME', rowVersion: bdAlert.rowVersion });
+    expect(exc.statusCode).toBe(200);
+    resetAlertThrottle(ctx.institutionId);
+    const after = (await api(enf, 'GET', '/alerts?kind=cme_bowie_dick_reprovado&status=todos')).json().rows.filter((a: { entityId: string }) => a.entityId === av2.id);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ status: 'encerrado', closedReason: 'excecao' });
+    const history = (await api(enf, 'GET', `/alerts/${bdAlert.id}`)).json().actions.map((x: { action: string }) => x.action);
+    expect(history).toEqual(['criado', 'excecao', 'visualizado']);
     const put = await api(cme, 'PUT', `/cme/sterilizers/${av2.id}`, { code: av2.code, name: av2.name, type: av2.type, serial: av2.serial, sectorId: av2.sector_id, status: 'manutencao', statusReason: 'Bowie-Dick reprovado; aguardando assistência técnica', qualificationDueOn: av2.qualification_due_on, rowVersion: av2.row_version, justification: J });
     expect(put.statusCode).toBe(200);
     const blocked = await api(cme, 'POST', '/cme/loads', { sterilizerId: av2.id, program: 'Instrumental 134 °C', startedAt: minutesAgo(5), notes: null, reprocessedFromId: null, items: [{ setId: await setId('cx-hernia'), description: null, quantity: 1, packaging: null, implant: null }] });

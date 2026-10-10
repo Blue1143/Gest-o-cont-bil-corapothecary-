@@ -423,9 +423,20 @@ export interface ActionPlanTable {
   status: 'pendente' | 'em_andamento' | 'concluida' | 'cancelada'; completed_on: string | null; created_at: CreatedAt; updated_at: Timestamp; row_version: RowVersion;
 }
 export interface AlertTable {
-  id: Generated<string>; institution_id: string; kind: string; dedup_key: string; priority: 'alta' | 'media' | 'baixa'; status: 'aberto' | 'assumido' | 'encerrado';
+  id: Generated<string>; institution_id: string; kind: string; dedup_key: string; priority: 'critica' | 'alta' | 'media' | 'baixa';
+  status: 'aberto' | 'reconhecido' | 'assumido' | 'resolvido' | 'encerrado';
   title: string; detail: string; entity: string; entity_id: string | null; sector_id: string | null; link: string | null; created_at: CreatedAt; last_seen_at: Timestamp;
   assigned_to: string | null; assigned_name: string | null; assigned_at: NullableTimestamp; closed_at: NullableTimestamp; closed_by_name: string | null; resolution: string | null; row_version: RowVersion;
+  category: 'erro_operacional' | 'violacao_sequencia' | 'pendencia_tempo' | 'falha_integracao' | 'informacao_obrigatoria' | 'nao_conformidade' | 'seguranca';
+  blocking: Generated<boolean>; step: string | null; due_on: string | null; unit_id: string | null;
+  acknowledged_at: NullableTimestamp; acknowledged_by: string | null; acknowledged_name: string | null;
+  resolved_at: NullableTimestamp; resolved_by: string | null; resolved_name: string | null; resolved_note: string | null;
+  closed_reason: 'manual' | 'automatico' | 'excecao' | null;
+}
+export interface AlertActionTable {
+  id: Generated<string>; alert_id: string;
+  action: 'criado' | 'visualizado' | 'reconhecido' | 'assumido' | 'comentado' | 'resolvido' | 'encerrado' | 'encerrado_automatico' | 'excecao';
+  user_id: string | null; user_name: string; note: string | null; at: CreatedAt;
 }
 export interface TrainingTable {
   id: Generated<string>; institution_id: string; title: string; theme: string; mandatory: boolean; validity_months: number | null; target_job_role_ids: string[];
@@ -596,6 +607,7 @@ export interface DB {
   nonconformity_status: NonconformityStatusTable;
   action_plan: ActionPlanTable;
   alert: AlertTable;
+  alert_action: AlertActionTable;
   training: TrainingTable;
   training_session: TrainingSessionTable;
   training_attendance: TrainingAttendanceTable;

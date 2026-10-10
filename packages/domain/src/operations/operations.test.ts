@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { checkAuditTransition, checkNcTransition } from './quality';
 import { coverageBySector, requiredTrainings, trainingExpiry } from './training';
 import { dailyConsumption, signedDelta, stockByLot, type LedgerMovement } from './supplies';
-import { buildAlertCandidates, type AlertInput } from './alerts';
+import { ALERT_KIND_BLOCKING, ALERT_KIND_CATEGORY, alertActions, buildAlertCandidates, type AlertInput, type AlertKind } from './alerts';
 import { consolidateOperationalFacts } from './consolidation';
 import { evaluateStock } from '../rules/operations';
 
@@ -96,5 +96,34 @@ describe('operational consolidation', () => {
       training: { professionals: [{ id: 'p', sectorId: 'uti', jobRoleId: 'enf', active: true }], trainings: [{ id: 't', mandatory: true, validityMonths: 12, targetJobRoleIds: ['enf'] }], attendances: [{ trainingId: 't', professionalId: 'p', heldOn: '2026-09-15', present: true }], warningDays: 30 },
     });
     expect(rows).toEqual([{ period: '2026-09-01', sectorId: 'uti', counts: { bundle_cvc_auditorias: 2, bundle_cvc_conformes: 1, hm_oportunidades: 20, hm_acoes: 15, alcool_ml: 750, treinamento_publico: 1, treinamento_concluidos: 1 } }]);
+  });
+});
+
+describe('alert center v2', () => {
+  it('classifies every kind and marks only safety conditions that must not be closed by hand as blocking', () => {
+    const kinds = Object.keys(ALERT_KIND_CATEGORY) as AlertKind[];
+    expect(kinds.every((k) => ALERT_KIND_CATEGORY[k])).toBe(true);
+    expect(kinds.filter((k) => ALERT_KIND_BLOCKING[k]).sort()).toEqual(['cme_bowie_dick_reprovado', 'cme_liberada_com_falha']);
+    expect(kinds.filter((k) => ALERT_KIND_BLOCKING[k]).every((k) => ALERT_KIND_CATEGORY[k] === 'seguranca')).toBe(true);
+  });
+
+  it('allows each action only in the right state, and no manual closing of blocking alerts', () => {
+    expect(alertActions({ status: 'aberto', blocking: false })).toEqual({ acknowledge: true, assume: true, resolve: true, close: true, exception: false });
+    expect(alertActions({ status: 'reconhecido', blocking: false })).toMatchObject({ acknowledge: false, assume: true });
+    expect(alertActions({ status: 'resolvido', blocking: false })).toMatchObject({ resolve: false, close: true });
+    expect(alertActions({ status: 'aberto', blocking: true })).toMatchObject({ close: false, exception: true });
+    expect(Object.values(alertActions({ status: 'encerrado', blocking: true })).some(Boolean)).toBe(false);
+  });
+
+  it('raises a recall with exposed patients and a released load that now fails as critical, with deadline and step where they apply', () => {
+    const input: AlertInput = {
+      today: '2026-10-09', rules: { investigationOverdueDays: 3, deviceReviewDays: undefined }, openCases: [{ id: 'c1', typeLabel: 'IPCS', patientLabel: 'A.B. · 1', openedOn: '2026-10-01', sectorId: 's' }],
+      openDevices: [], newMdr: [], trainingGaps: [], supplies: [], overdueActions: [], pendingFollowups: [],
+      cme: { recalledLoads: [{ loadId: 'l1', code: 'AV1', surgeries: 1, patients: 1, sectorId: 'cme' }], releasedWithFailure: [{ loadId: 'l2', code: 'AV2', reason: 'IB positivo.', sectorId: 'cme' }], failedBowieDick: [], pendingIb: [], qualifications: [] },
+    };
+    const out = buildAlertCandidates(input);
+    expect(out.find((c) => c.kind === 'cme_carga_recolhida')?.priority).toBe('critica');
+    expect(out.find((c) => c.kind === 'cme_liberada_com_falha')).toMatchObject({ priority: 'critica', step: 'liberacao' });
+    expect(out.find((c) => c.kind === 'iras_investigacao_atrasada')?.dueOn).toBe('2026-10-04');
   });
 });

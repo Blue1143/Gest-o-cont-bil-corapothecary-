@@ -1,7 +1,7 @@
 import { sql, type Kysely } from 'kysely';
 import {
-  IRAS_TYPES, addDays, bowieDickApplies, buildAlertCandidates, dateInZone, rulesFromParameters, surveillanceEnd, todayIn, zonedInstant,
-  type AlertCandidate, type AlertInput,
+  ALERT_KIND_BLOCKING, ALERT_KIND_CATEGORY, IRAS_TYPES, addDays, bowieDickApplies, buildAlertCandidates, dateInZone, rulesFromParameters, surveillanceEnd, todayIn, zonedInstant,
+  type AlertCandidate, type AlertInput, type AlertKind,
 } from '@ccih/domain';
 import type { DB } from '../db/types';
 import { loadRequiredTrainings, loadSupplies } from '../routes/training-supplies';
@@ -172,21 +172,36 @@ async function generate(db: Kysely<DB>, institutionId: string, now: Date): Promi
       const handled = await trx.selectFrom('alert').select('dedup_key').where('institution_id', '=', institutionId).where('status', '=', 'encerrado').where('dedup_key', 'in', eventKeys).execute();
       for (const h of handled) suppressed.add(h.dedup_key);
     }
+    // A formal exception accepts the persisting condition: it is not raised again for the same key.
+    const keys = candidates.map((c) => c.dedupKey);
+    if (keys.length) {
+      const excepted = await trx.selectFrom('alert').select('dedup_key').where('institution_id', '=', institutionId).where('closed_reason', '=', 'excecao').where('dedup_key', 'in', keys).execute();
+      for (const h of excepted) suppressed.add(h.dedup_key);
+    }
+    const sectorUnits = new Map((await trx.selectFrom('sector').select(['id', 'unit_id']).where('institution_id', '=', institutionId).execute()).map((x) => [x.id, x.unit_id]));
     let created = 0;
     const seen = new Set<string>();
     for (const c of candidates) {
       seen.add(c.dedupKey);
       const id = openKeys.get(c.dedupKey);
       if (id) {
-        await trx.updateTable('alert').set({ last_seen_at: now, title: c.title, detail: c.detail, priority: c.priority }).where('id', '=', id).execute();
+        await trx.updateTable('alert').set({ last_seen_at: now, title: c.title, detail: c.detail, priority: c.priority, due_on: c.dueOn ?? null }).where('id', '=', id).execute();
       } else if (!suppressed.has(c.dedupKey)) {
-        await trx.insertInto('alert').values({ institution_id: institutionId, kind: c.kind, dedup_key: c.dedupKey, priority: c.priority, status: 'aberto', title: c.title, detail: c.detail, entity: c.entity, entity_id: c.entityId, sector_id: c.sectorId, link: c.link, last_seen_at: now }).execute();
+        const kind = c.kind as AlertKind;
+        const row = await trx.insertInto('alert').values({
+          institution_id: institutionId, kind, dedup_key: c.dedupKey, priority: c.priority, status: 'aberto', title: c.title, detail: c.detail, entity: c.entity, entity_id: c.entityId,
+          sector_id: c.sectorId, link: c.link, last_seen_at: now, category: ALERT_KIND_CATEGORY[kind], blocking: ALERT_KIND_BLOCKING[kind], step: c.step ?? null, due_on: c.dueOn ?? null,
+          unit_id: c.sectorId ? (sectorUnits.get(c.sectorId) ?? null) : null,
+        }).returning('id').executeTakeFirstOrThrow();
+        await trx.insertInto('alert_action').values({ alert_id: row.id, action: 'criado', user_id: null, user_name: 'Sistema', note: null, at: now }).execute();
         created++;
       }
     }
     const gone = open.filter((a) => !seen.has(a.dedup_key)).map((a) => a.id);
     if (gone.length) {
-      await trx.updateTable('alert').set({ status: 'encerrado', closed_at: now, closed_by_name: 'Sistema', resolution: 'Condição resolvida no registro de origem.', row_version: (eb) => eb('row_version', '+', 1) }).where('id', 'in', gone).execute();
+      const note = 'Condição resolvida no registro de origem.';
+      await trx.updateTable('alert').set({ status: 'encerrado', closed_at: now, closed_by_name: 'Sistema', resolution: note, closed_reason: 'automatico', row_version: (eb) => eb('row_version', '+', 1) }).where('id', 'in', gone).execute();
+      await trx.insertInto('alert_action').values(gone.map((alertId) => ({ alert_id: alertId, action: 'encerrado_automatico' as const, user_id: null, user_name: 'Sistema', note, at: now }))).execute();
     }
     return { created, resolved: gone.length };
   });

@@ -36,6 +36,7 @@ const NcDetailPage = named(() => import('../features/operations/AuditsPages'), '
 const TrainingsPage = named(() => import('../features/operations/TrainingsPage'), 'TrainingsPage');
 const SuppliesPage = named(() => import('../features/operations/SuppliesPage'), 'SuppliesPage');
 const AlertsPage = named(() => import('../features/operations/AlertsPage'), 'AlertsPage');
+const AlertDetailPage = named(() => import('../features/operations/AlertsPage'), 'AlertDetailPage');
 const CmePage = named(() => import('../features/cme/CmePage'), 'CmePage');
 const LoadDetailPage = named(() => import('../features/cme/LoadDetailPage'), 'LoadDetailPage');
 const BowieDickPage = named(() => import('../features/cme/EquipmentPages'), 'BowieDickPage');
@@ -77,6 +78,7 @@ export const routes: RouteObject[] = [
       { path: 'treinamentos', element: guarded(['quality:view'], <TrainingsPage />) },
       { path: 'insumos', element: guarded(['quality:view'], <SuppliesPage />) },
       { path: 'alertas', element: guarded(['alerts:view'], <AlertsPage />) },
+      { path: 'alertas/:id', element: guarded(['alerts:view'], <AlertDetailPage />) },
       { path: 'cme', element: guarded(['cme:view'], <CmePage />) },
       { path: 'cme/cargas/:id', element: guarded(['cme:view'], <LoadDetailPage />) },
       { path: 'cme/bowie-dick', element: guarded(['cme:view'], <BowieDickPage />) },

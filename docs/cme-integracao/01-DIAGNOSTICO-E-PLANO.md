@@ -415,7 +415,8 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 | C2/C3 | Concluídas | Migração 0005; testes de API contra PostgreSQL (continuidade, regra de saída, recusas, idempotência, exceção, pareamento, acesso) |
 | C4 | Concluída | Testes de interface (campo de leitura, idempotência no reenvio, exceção, conferência manual) e E2E do fluxo completo com leitor simulado por teclado |
 | C5 | Concluída | Migração 0006; testes de API (não conformidade + notificação só para quem registrou, leitura da notificação, notificação não pode ser excluída, conferência manual sem justificativa) e de interface (sino com contador, marcar como lida, continuar na próxima etapa) |
-| D1 em diante | Pendentes | — |
+| D1 | Concluída | Migração 0007; testes de domínio (categorias, bloqueio, ações permitidas, gravidade crítica), de API (ciclo completo com histórico, filtros, visualizar não muda a situação, bloqueante não encerra à mão, exceção só com permissão e sem recriação, histórico imutável) e de interface |
+| D2 em diante | Pendentes | — |
 
 **O que C4 entrega:** tela "Estação de leitura" (escolha da estação, etapa, campo que distingue leitor × digitação pelo intervalo entre teclas, câmera via `BarcodeDetector` quando o navegador oferece, conferência manual no sistema, resultado da leitura com o motivo, exceção autorizada, últimas leituras); "Processos" (lista e trilha de cada rodada, com leituras recusadas); "Estações e fluxo" (regras institucionais, cadastro de estações, pareamento de computadores); "Materiais" (emissão de códigos de ativos); carga "em montagem" com início do ciclo; links da rastreabilidade para a trilha do processo.
 
@@ -430,3 +431,13 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 - Notificações pessoais: sino no cabeçalho com o número de não lidas e a página "Notificações". Cada usuário vê só as suas; marcar como lida não apaga (o banco recusa exclusão). O texto é completo mesmo para quem não tem acesso ao módulo de qualidade; o link para a não conformidade só aparece para quem pode abri-la.
 - Conferência manual sem justificativa; depois de uma leitura ou conferência aceita, a estação oferece seguir para a próxima etapa quando a atende.
 - Migração 0006 remove `exit_required_from` e `manual_requires_justification` de `cme_flow_config`.
+
+**O que D1 entrega (Central de Alertas v2, a mesma tabela `alert`, sem um segundo sistema):**
+- Categoria (erro operacional, violação de sequência, pendência de tempo, falha de integração, informação obrigatória ausente, não conformidade, segurança do paciente), gravidade **crítica**, prazo, etapa da CME e unidade.
+- Ciclo: aberto → reconhecido → assumido → resolvido → encerrado. Visualizar o detalhe registra "visualizado" (uma vez por usuário) e não muda a situação. Comentários entram no histórico.
+- `alert_action` (somente inserção, protegida por gatilho) guarda cada ação com usuário, data e nota; alertas anteriores à migração receberam o histórico reconstituído (criado, assumido, encerrado).
+- Alertas **bloqueantes** (carga liberada com teste reprovado; Bowie-Dick reprovado com equipamento em uso): não podem ser encerrados à mão enquanto a condição existir. Saída: corrigir a causa (o sistema encerra sozinho) ou **exceção formal** com a permissão `alerts:exception` (concedida por padrão a Administrador e Enfermeiro(a) CCIH), justificativa obrigatória; a mesma situação não volta a alertar.
+- Gravidade crítica: carga recolhida com paciente exposto, carga liberada que passou a reprovar, Bowie-Dick reprovado. O contador do menu soma crítica + alta.
+- Filtros: situação, gravidade, categoria, tipo, unidade, setor, período de criação, só bloqueantes, só os meus.
+
+**Aprovação pendente:** quais perfis recebem `alerts:exception` e quais tipos de alerta são bloqueantes (hoje: os dois de segurança da esterilização).
