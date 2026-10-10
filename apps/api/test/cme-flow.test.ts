@@ -282,3 +282,83 @@ describe('stations', () => {
     expect((await api(consulta, 'GET', '/cme/sectors')).statusCode).toBe(403);
   });
 });
+
+describe('process-break alerts', () => {
+  const setParam = async (key: string, value: number) => {
+    await ctx.db.deleteFrom('rule_parameter').where('institution_id', '=', ctx.institutionId).where('key', '=', key).execute();
+    await ctx.db.insertInto('rule_parameter').values({ institution_id: ctx.institutionId, key, value: JSON.stringify(value), reference_id: null, approved_by: null, approved_by_name: null, updated_at: new Date() }).execute();
+  };
+  const dropParam = (key: string) => ctx.db.deleteFrom('rule_parameter').where('institution_id', '=', ctx.institutionId).where('key', '=', key).execute();
+  const refreshAt = async (hoursAhead: number) => {
+    const { refreshAlerts } = await import('../src/services/alerts');
+    await refreshAlerts(ctx.db, ctx.institutionId, new Date(Date.now() + hoursAhead * 3_600_000), true);
+  };
+  const openAlerts = (kind: string) => ctx.db.selectFrom('alert').selectAll().where('kind', '=', kind).where('status', '<>', 'encerrado').execute();
+
+  it('raises no time alert while the institution has not configured a deadline, and follows the deadline once it exists', async () => {
+    const asset = await newAsset();
+    const received = await read(cme, 'Expurgo — recepção', 'recepcao', asset);
+    await dropParam('cme.receptionMaxHours');
+    await refreshAt(30);
+    expect((await openAlerts('cme_etapa_atrasada')).filter((a) => a.entity_id === received.process.id)).toHaveLength(0);
+
+    await setParam('cme.receptionMaxHours', 4);
+    await refreshAt(2);
+    expect((await openAlerts('cme_etapa_atrasada')).filter((a) => a.entity_id === received.process.id)).toHaveLength(0);
+    await refreshAt(5);
+    const [late] = (await openAlerts('cme_etapa_atrasada')).filter((a) => a.entity_id === received.process.id);
+    expect(late).toMatchObject({ category: 'pendencia_tempo', step: 'recepcao', blocking: false });
+    expect(late!.title).toMatch(/parado em recepção há 5 h/);
+
+    // The next reading moves the material on: the condition is gone and the alert closes by itself.
+    await read(cme, 'Limpeza', 'limpeza', asset);
+    await refreshAt(5);
+    const closed = await ctx.db.selectFrom('alert').select(['status', 'closed_reason']).where('id', '=', late!.id).executeTakeFirstOrThrow();
+    expect(closed).toEqual({ status: 'encerrado', closed_reason: 'automatico' });
+    await dropParam('cme.receptionMaxHours');
+  });
+
+  it('flags loads awaiting the release decision beyond the configured time', async () => {
+    const asset = await newAsset();
+    for (const [st, step, outcome] of [['Expurgo — recepção', 'recepcao'], ['Limpeza', 'limpeza'], ['Inspeção e preparo', 'inspecao', 'aprovado'], ['Inspeção e preparo', 'preparo'], ['Embalagem', 'embalagem']] as const) {
+      await read(cme, st, step, asset, outcome ? { outcome } : {});
+    }
+    const load = await assemblyLoad();
+    await read(cme, 'Montagem de carga', 'esterilizacao', asset, { loadId: load.id });
+    await sql`UPDATE sterilization_load SET created_at = now() - interval '2 hours' WHERE id = ${load.id}`.execute(ctx.owner);
+    let l = (await api(cme, 'GET', `/cme/loads/${load.id}`)).json();
+    expect((await api(cme, 'POST', `/cme/loads/${load.id}/start`, { startedAt: minutesAgo(60), rowVersion: l.rowVersion })).statusCode).toBe(200);
+    l = (await api(cme, 'GET', `/cme/loads/${load.id}`)).json();
+    expect((await api(cme, 'POST', `/cme/loads/${load.id}/cycle`, { endedAt: minutesAgo(10), temperatureC: 50, pressureKpa: null, exposureMinutes: 28, physicalResult: 'conforme', notes: null, rowVersion: l.rowVersion })).statusCode).toBe(200);
+    await setParam('cme.loadDecisionMaxHours', 3);
+    await refreshAt(1);
+    expect((await openAlerts('cme_carga_aguardando_decisao')).some((a) => a.entity_id === load.id)).toBe(false);
+    await refreshAt(4);
+    expect((await openAlerts('cme_carga_aguardando_decisao')).find((a) => a.entity_id === load.id)).toMatchObject({ step: 'liberacao', category: 'pendencia_tempo' });
+    await dropParam('cme.loadDecisionMaxHours');
+  });
+
+  it('flags repeated refused readings, readings at an incompatible station and exit attempts before release', async () => {
+    await setParam('cme.invalidReadingsLimit', 3);
+    await setParam('cme.invalidReadingsWindowMin', 30);
+    const station = (await ctx.db.selectFrom('scan_station').select('id').where('name', '=', 'Devoluções').executeTakeFirstOrThrow()).id;
+    for (const code of ['AT-ZZZZZZZZ', 'AT-YYYYYYYY']) expect((await read(cme, 'Devoluções', 'devolucao', code, { outcome: 'retorno_estoque' })).result).toBe('codigo_desconhecido');
+    await refreshAt(0);
+    expect((await openAlerts('cme_leituras_recusadas')).some((a) => a.entity_id === station)).toBe(false);
+    expect((await read(cme, 'Devoluções', 'devolucao', 'AT-XXXXXXXX', { outcome: 'retorno_estoque' })).result).toBe('codigo_desconhecido');
+    await refreshAt(0);
+    expect((await openAlerts('cme_leituras_recusadas')).find((a) => a.entity_id === station)).toMatchObject({ category: 'erro_operacional' });
+
+    // A step the station does not handle.
+    expect((await read(cme, 'Devoluções', 'limpeza', 'AT-ZZZZZZZZ')).result).toBe('estacao_invalida');
+    await refreshAt(0);
+    expect((await openAlerts('cme_estacao_incompativel')).some((a) => a.entity_id === station)).toBe(true);
+
+    // The continuity test tried an exit before the release: that attempt is on record.
+    const exits = await ctx.db.selectFrom('alert').selectAll().where('kind', '=', 'cme_saida_sem_liberacao').execute();
+    expect(exits.length).toBeGreaterThan(0);
+    expect(exits[0]).toMatchObject({ category: 'violacao_sequencia', priority: 'alta', step: 'distribuicao' });
+    await dropParam('cme.invalidReadingsLimit');
+    await dropParam('cme.invalidReadingsWindowMin');
+  });
+});

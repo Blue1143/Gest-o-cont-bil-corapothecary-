@@ -10,7 +10,8 @@ import type { StockEvaluation } from '../rules/operations';
 export type AlertKind =
   | 'iras_investigacao_atrasada' | 'dispositivo_prolongado' | 'mdr_novo' | 'treinamento_vencido'
   | 'insumo_critico' | 'plano_acao_atrasado' | 'isc_contato_pendente'
-  | 'cme_carga_recolhida' | 'cme_uso_sem_saida' | 'cme_liberada_com_falha' | 'cme_bowie_dick_reprovado' | 'cme_ib_leitura_atrasada' | 'cme_qualificacao';
+  | 'cme_carga_recolhida' | 'cme_uso_sem_saida' | 'cme_liberada_com_falha' | 'cme_bowie_dick_reprovado' | 'cme_ib_leitura_atrasada' | 'cme_qualificacao'
+  | 'cme_etapa_atrasada' | 'cme_carga_aguardando_decisao' | 'cme_leituras_recusadas' | 'cme_estacao_incompativel' | 'cme_saida_sem_liberacao';
 
 /** Severity (kept under the historical name "priority"). */
 export type AlertPriority = 'critica' | 'alta' | 'media' | 'baixa';
@@ -33,6 +34,11 @@ export const ALERT_KIND_LABEL: Record<AlertKind, string> = {
   cme_bowie_dick_reprovado: 'Bowie-Dick reprovado com equipamento em uso',
   cme_ib_leitura_atrasada: 'Indicador biológico sem leitura no prazo',
   cme_qualificacao: 'Qualificação de equipamento da CME',
+  cme_etapa_atrasada: 'Material parado numa etapa da CME além do prazo',
+  cme_carga_aguardando_decisao: 'Carga aguardando decisão de liberação além do prazo',
+  cme_leituras_recusadas: 'Leituras recusadas repetidas numa estação',
+  cme_estacao_incompativel: 'Leitura em estação incompatível com a etapa',
+  cme_saida_sem_liberacao: 'Tentativa de saída de material sem liberação',
 };
 export const ALERT_PRIORITY_LABEL: Record<AlertPriority, string> = { critica: 'Crítica', alta: 'Alta', media: 'Média', baixa: 'Baixa' };
 export const ALERT_PRIORITY_ORDER: AlertPriority[] = ['critica', 'alta', 'media', 'baixa'];
@@ -53,6 +59,8 @@ export const ALERT_KIND_CATEGORY: Record<AlertKind, AlertCategory> = {
   insumo_critico: 'seguranca', plano_acao_atrasado: 'nao_conformidade', isc_contato_pendente: 'pendencia_tempo',
   cme_carga_recolhida: 'seguranca', cme_uso_sem_saida: 'violacao_sequencia', cme_liberada_com_falha: 'seguranca', cme_bowie_dick_reprovado: 'seguranca',
   cme_ib_leitura_atrasada: 'pendencia_tempo', cme_qualificacao: 'pendencia_tempo',
+  cme_etapa_atrasada: 'pendencia_tempo', cme_carga_aguardando_decisao: 'pendencia_tempo', cme_leituras_recusadas: 'erro_operacional', cme_estacao_incompativel: 'erro_operacional',
+  cme_saida_sem_liberacao: 'violacao_sequencia',
 };
 
 /**
@@ -62,7 +70,8 @@ export const ALERT_KIND_CATEGORY: Record<AlertKind, AlertCategory> = {
 export const ALERT_KIND_BLOCKING: Record<AlertKind, boolean> = {
   iras_investigacao_atrasada: false, dispositivo_prolongado: false, mdr_novo: false, treinamento_vencido: false, insumo_critico: false, plano_acao_atrasado: false,
   isc_contato_pendente: false, cme_carga_recolhida: false, cme_uso_sem_saida: false, cme_liberada_com_falha: true, cme_bowie_dick_reprovado: true,
-  cme_ib_leitura_atrasada: false, cme_qualificacao: false,
+  cme_ib_leitura_atrasada: false, cme_qualificacao: false, cme_etapa_atrasada: false, cme_carga_aguardando_decisao: false, cme_leituras_recusadas: false,
+  cme_estacao_incompativel: false, cme_saida_sem_liberacao: false,
 };
 
 /** Statuses still requiring work (everything but closed). */
@@ -85,6 +94,7 @@ export const ALERT_KIND_PERMISSION: Record<AlertKind, Permission> = {
   iras_investigacao_atrasada: 'iras:view', dispositivo_prolongado: 'patient:view', mdr_novo: 'micro:view', treinamento_vencido: 'quality:view',
   insumo_critico: 'quality:view', plano_acao_atrasado: 'quality:view', isc_contato_pendente: 'surgery:view',
   cme_carga_recolhida: 'cme:view', cme_liberada_com_falha: 'cme:view', cme_uso_sem_saida: 'cme:view', cme_bowie_dick_reprovado: 'cme:view', cme_ib_leitura_atrasada: 'cme:view', cme_qualificacao: 'cme:view',
+  cme_etapa_atrasada: 'cme:view', cme_carga_aguardando_decisao: 'cme:view', cme_leituras_recusadas: 'cme:view', cme_estacao_incompativel: 'cme:view', cme_saida_sem_liberacao: 'cme:view',
 };
 
 export interface AlertCandidate {
@@ -114,6 +124,11 @@ export interface AlertRules {
   deviceReviewDays: number | undefined;
   ibReadingHours?: number | undefined;
   qualificationWarningDays?: number | undefined;
+  /** Hours allowed at each CME step before the next reading; a step without a value raises nothing. */
+  cmeStepMaxHours?: Partial<Record<'recepcao' | 'limpeza' | 'inspecao' | 'preparo' | 'embalagem', number>>;
+  loadDecisionMaxHours?: number | undefined;
+  invalidReadingsLimit?: number | undefined;
+  invalidReadingsWindowMin?: number | undefined;
 }
 
 export interface AlertInput {
@@ -138,8 +153,20 @@ export interface AlertInput {
     /** Pending biological indicators with the hours since incubation started. */
     pendingIb: Array<{ testId: string; loadId: string; loadCode: string; hours: number; sectorId: string }>;
     qualifications: Array<{ sterilizerId: string; name: string; dueOn: IsoDate; sectorId: string }>;
+    /** Open processes with the hours since their last accepted reading. */
+    stalledProcesses?: Array<{ processId: string; label: string; step: 'recepcao' | 'limpeza' | 'inspecao' | 'preparo' | 'embalagem'; hours: number; sectorId: string | null }>;
+    /** Loads whose cycle ended and still await the release decision. */
+    loadsAwaitingDecision?: Array<{ loadId: string; code: string; hours: number; sectorId: string }>;
+    /** Refused readings per station within the configured window. */
+    refusedReadings?: Array<{ stationId: string; stationName: string; count: number; sectorId: string }>;
+    /** Readings refused today because the station does not handle the step (or method). */
+    incompatibleStations?: Array<{ stationId: string; stationName: string; count: number; sectorId: string }>;
+    /** Exit or separation attempts refused because the load was not released (last 30 days). */
+    exitsWithoutRelease?: Array<{ processId: string; label: string; loadCode: string | null; on: IsoDate; sectorId: string | null }>;
   };
 }
+
+const STEP_NAME = { recepcao: 'recepção', limpeza: 'limpeza', inspecao: 'inspeção', preparo: 'preparo', embalagem: 'embalagem' } as const;
 
 export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
   const out: AlertCandidate[] = [];
@@ -201,6 +228,56 @@ export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
         if (days > warn) continue;
         out.push({ kind: 'cme_qualificacao', dedupKey: `qualif:${q.sterilizerId}:${q.dueOn}`, dueOn: q.dueOn, priority: days < 0 ? 'alta' : 'baixa', title: days < 0 ? `${q.name}: qualificação vencida` : `${q.name}: qualificação vence em ${days} dia(s)`, detail: `Vencimento em ${q.dueOn.split('-').reverse().join('/')}.`, entity: 'sterilizer', entityId: q.sterilizerId, sectorId: q.sectorId, link: '/cme/equipamentos' });
       }
+    }
+    // Process breaks. Time rules only exist where the institution configured a deadline.
+    const stepLimits = input.rules.cmeStepMaxHours ?? {};
+    for (const p of input.cme.stalledProcesses ?? []) {
+      const limit = stepLimits[p.step];
+      if (limit == null || p.hours < limit) continue;
+      out.push({
+        kind: 'cme_etapa_atrasada', dedupKey: `etapa:${p.processId}:${p.step}`, priority: 'media', step: p.step,
+        title: `${p.label}: parado em ${STEP_NAME[p.step]} há ${Math.floor(p.hours)} h`, detail: `Prazo institucional para a próxima leitura: ${limit} h.`,
+        entity: 'cme_process', entityId: p.processId, sectorId: p.sectorId, link: `/cme/processos/${p.processId}`,
+      });
+    }
+    const decision = input.rules.loadDecisionMaxHours;
+    if (decision != null) {
+      for (const l of input.cme.loadsAwaitingDecision ?? []) {
+        if (l.hours < decision) continue;
+        out.push({
+          kind: 'cme_carga_aguardando_decisao', dedupKey: `decisao:${l.loadId}`, priority: 'media', step: 'liberacao',
+          title: `Carga ${l.code} aguardando decisão há ${Math.floor(l.hours)} h`, detail: `Prazo institucional entre o fim do ciclo e a decisão: ${decision} h.`,
+          entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}`,
+        });
+      }
+    }
+    const refusedLimit = input.rules.invalidReadingsLimit;
+    if (refusedLimit != null && input.rules.invalidReadingsWindowMin != null) {
+      for (const r of input.cme.refusedReadings ?? []) {
+        if (r.count < refusedLimit) continue;
+        out.push({
+          kind: 'cme_leituras_recusadas', dedupKey: `recusas:${r.stationId}:${input.today}`, priority: 'media',
+          title: `${r.stationName}: ${r.count} leituras recusadas em ${input.rules.invalidReadingsWindowMin} min`,
+          detail: 'Verifique o leitor, as etiquetas e a etapa escolhida na estação. As leituras recusadas estão na lista da estação.',
+          entity: 'scan_station', entityId: r.stationId, sectorId: r.sectorId, link: `/cme/estacao?estacao=${r.stationId}`,
+        });
+      }
+    }
+    for (const st of input.cme.incompatibleStations ?? []) {
+      out.push({
+        kind: 'cme_estacao_incompativel', oneShot: true, dedupKey: `incompativel:${st.stationId}:${input.today}`, priority: 'baixa',
+        title: `${st.stationName}: ${st.count} leitura(s) de etapa ou método não configurado na estação`,
+        detail: 'A leitura foi recusada. Confira a configuração da estação ou oriente a leitura na estação correta.',
+        entity: 'scan_station', entityId: st.stationId, sectorId: st.sectorId, link: '/cme/estacoes',
+      });
+    }
+    for (const x of input.cme.exitsWithoutRelease ?? []) {
+      out.push({
+        kind: 'cme_saida_sem_liberacao', oneShot: true, dedupKey: `saida:${x.processId}`, priority: 'alta', step: 'distribuicao',
+        title: `${x.label}: tentativa de saída sem liberação${x.loadCode ? ` (carga ${x.loadCode})` : ''}`,
+        detail: `Em ${x.on.split('-').reverse().join('/')}. A saída foi recusada pelo sistema; confira por que o material chegou à expedição antes da liberação.`,
+        entity: 'cme_process', entityId: x.processId, sectorId: x.sectorId, link: `/cme/processos/${x.processId}`,
+      });
     }
   }
   return out;

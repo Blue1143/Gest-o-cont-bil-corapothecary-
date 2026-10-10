@@ -416,7 +416,8 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 | C4 | Concluída | Testes de interface (campo de leitura, idempotência no reenvio, exceção, conferência manual) e E2E do fluxo completo com leitor simulado por teclado |
 | C5 | Concluída | Migração 0006; testes de API (não conformidade + notificação só para quem registrou, leitura da notificação, notificação não pode ser excluída, conferência manual sem justificativa) e de interface (sino com contador, marcar como lida, continuar na próxima etapa) |
 | D1 | Concluída | Migração 0007; testes de domínio (categorias, bloqueio, ações permitidas, gravidade crítica), de API (ciclo completo com histórico, filtros, visualizar não muda a situação, bloqueante não encerra à mão, exceção só com permissão e sem recriação, histórico imutável) e de interface |
-| D2 em diante | Pendentes | — |
+| D2 | Concluída | Testes de domínio (nenhum alerta sem valor institucional; cada prazo vale só para a sua etapa; eventos) e de API contra PostgreSQL (prazo não configurado não alerta; prazo configurado alerta e o alerta se encerra sozinho com a leitura seguinte; carga aguardando decisão; leituras recusadas repetidas; estação incompatível; tentativa de saída sem liberação) |
+| G1 em diante | Pendentes | — |
 
 **O que C4 entrega:** tela "Estação de leitura" (escolha da estação, etapa, campo que distingue leitor × digitação pelo intervalo entre teclas, câmera via `BarcodeDetector` quando o navegador oferece, conferência manual no sistema, resultado da leitura com o motivo, exceção autorizada, últimas leituras); "Processos" (lista e trilha de cada rodada, com leituras recusadas); "Estações e fluxo" (regras institucionais, cadastro de estações, pareamento de computadores); "Materiais" (emissão de códigos de ativos); carga "em montagem" com início do ciclo; links da rastreabilidade para a trilha do processo.
 
@@ -441,3 +442,11 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 - Filtros: situação, gravidade, categoria, tipo, unidade, setor, período de criação, só bloqueantes, só os meus.
 
 **Aprovação pendente:** quais perfis recebem `alerts:exception` e quais tipos de alerta são bloqueantes (hoje: os dois de segurança da esterilização).
+
+**O que D2 entrega (regras de quebra de processo da CME, na Central de Alertas):**
+- Parâmetros novos em Administração › Parâmetros (grupo CME), **todos sem valor padrão** — sem valor, a regra não é aplicada:
+  tempo máximo entre recepção e limpeza, limpeza e inspeção, inspeção e preparo, preparo e embalagem, embalagem e montagem da carga; tempo máximo entre o fim do ciclo e a decisão de liberação; quantidade de leituras recusadas e a janela (minutos) para contá-las.
+- Alertas: material parado numa etapa além do prazo (contado a partir da última leitura aceita); carga aguardando decisão além do prazo; leituras recusadas repetidas numa estação; leitura em estação incompatível (evento, uma vez por estação e dia); tentativa de saída sem liberação (evento por processo, gravidade alta).
+- Os alertas de tempo se encerram sozinhos quando a leitura seguinte (ou a decisão) acontece.
+
+**Aprovação pendente:** os valores de cada prazo e do limite de leituras recusadas (decisão institucional; o sistema não sugere números).

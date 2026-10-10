@@ -77,6 +77,17 @@ export interface InstitutionalRules {
     ibReadingHours?: RuleParameter<number>;
     /** Days before the thermal qualification due date that raise an alert. */
     qualificationWarningDays?: RuleParameter<number>;
+    /** Maximum hours a material may wait at a step before the next reading (no value: no alert). */
+    receptionMaxHours?: RuleParameter<number>;
+    cleaningMaxHours?: RuleParameter<number>;
+    inspectionMaxHours?: RuleParameter<number>;
+    preparationMaxHours?: RuleParameter<number>;
+    packagingMaxHours?: RuleParameter<number>;
+    /** Maximum hours between the end of the cycle and the release decision. */
+    loadDecisionMaxHours?: RuleParameter<number>;
+    /** Refused readings at one station within the window that raise an alert (both needed). */
+    invalidReadingsLimit?: RuleParameter<number>;
+    invalidReadingsWindowMin?: RuleParameter<number>;
   };
 }
 

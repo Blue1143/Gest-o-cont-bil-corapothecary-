@@ -127,3 +127,34 @@ describe('alert center v2', () => {
     expect(out.find((c) => c.kind === 'iras_investigacao_atrasada')?.dueOn).toBe('2026-10-04');
   });
 });
+
+describe('CME process-break rules', () => {
+  const base = (rules: AlertInput['rules'], cme: Partial<NonNullable<AlertInput['cme']>>): AlertInput => ({
+    today: '2026-10-09', rules, openCases: [], openDevices: [], newMdr: [], trainingGaps: [], supplies: [], overdueActions: [], pendingFollowups: [],
+    cme: { recalledLoads: [], releasedWithFailure: [], failedBowieDick: [], pendingIb: [], qualifications: [], ...cme },
+  });
+  const stalled = [{ processId: 'p1', label: 'Caixa (AT-1)', step: 'limpeza' as const, hours: 30, sectorId: 'cme' }];
+  const loads = [{ loadId: 'l1', code: 'AV1-01', hours: 30, sectorId: 'cme' }];
+  const refused = [{ stationId: 's1', stationName: 'Limpeza', count: 5, sectorId: 'cme' }];
+
+  it('raises no time or count alert without an institutional value', () => {
+    const out = buildAlertCandidates(base({ investigationOverdueDays: undefined, deviceReviewDays: undefined }, { stalledProcesses: stalled, loadsAwaitingDecision: loads, refusedReadings: refused }));
+    expect(out).toEqual([]);
+  });
+
+  it('applies each configured deadline to its own step only', () => {
+    const rules = { investigationOverdueDays: undefined, deviceReviewDays: undefined, cmeStepMaxHours: { recepcao: 2 }, loadDecisionMaxHours: 24, invalidReadingsLimit: 5, invalidReadingsWindowMin: 30 };
+    const out = buildAlertCandidates(base(rules, { stalledProcesses: stalled, loadsAwaitingDecision: loads, refusedReadings: refused }));
+    expect(out.map((c) => c.kind).sort()).toEqual(['cme_carga_aguardando_decisao', 'cme_leituras_recusadas']);
+    const withCleaning = buildAlertCandidates(base({ ...rules, cmeStepMaxHours: { limpeza: 24 } }, { stalledProcesses: stalled }));
+    expect(withCleaning[0]).toMatchObject({ kind: 'cme_etapa_atrasada', step: 'limpeza', dedupKey: 'etapa:p1:limpeza' });
+  });
+
+  it('records exit attempts before release and incompatible stations as events', () => {
+    const out = buildAlertCandidates(base({ investigationOverdueDays: undefined, deviceReviewDays: undefined }, {
+      exitsWithoutRelease: [{ processId: 'p2', label: 'Ótica (AT-2)', loadCode: 'PL1-01', on: '2026-10-09', sectorId: 'cme' }],
+      incompatibleStations: [{ stationId: 's2', stationName: 'Arsenal', count: 2, sectorId: 'cme' }],
+    }));
+    expect(out.map((c) => [c.kind, c.oneShot, c.priority])).toEqual([['cme_estacao_incompativel', true, 'baixa'], ['cme_saida_sem_liberacao', true, 'alta']]);
+  });
+});

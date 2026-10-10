@@ -41,6 +41,14 @@ export const RULE_PARAMETERS: RuleParameterSpec[] = [
   spec('cme', 'shelfLifeDays', 'Validade da esterilização dos pacotes', 'dias', 1, 365),
   spec('cme', 'ibReadingHours', 'Prazo para leitura do indicador biológico após a incubação', 'h', 1, 168),
   spec('cme', 'qualificationWarningDays', 'Alerta de qualificação de equipamento a vencer', 'dias', 1, 180),
+  spec('cme', 'receptionMaxHours', 'Tempo máximo entre a recepção e a limpeza', 'h', 1, 720),
+  spec('cme', 'cleaningMaxHours', 'Tempo máximo entre a limpeza e a inspeção', 'h', 1, 720),
+  spec('cme', 'inspectionMaxHours', 'Tempo máximo entre a inspeção e o preparo', 'h', 1, 720),
+  spec('cme', 'preparationMaxHours', 'Tempo máximo entre o preparo e a embalagem', 'h', 1, 720),
+  spec('cme', 'packagingMaxHours', 'Tempo máximo entre a embalagem e a montagem da carga', 'h', 1, 720),
+  spec('cme', 'loadDecisionMaxHours', 'Tempo máximo entre o fim do ciclo e a decisão de liberação', 'h', 1, 720),
+  spec('cme', 'invalidReadingsLimit', 'Leituras recusadas na mesma estação que geram alerta', 'leituras', 2, 100),
+  spec('cme', 'invalidReadingsWindowMin', 'Janela para contar as leituras recusadas', 'min', 1, 1440),
 ];
 
 export const RULE_GROUP_LABEL: Record<keyof InstitutionalRules, string> = {

@@ -67,7 +67,7 @@ export async function collectCandidates(db: Kysely<DB>, institutionId: string, n
     return end && end.end >= today && end.end <= addDays(today, 7) ? [{ surgeryId: s.id, procedure: s.name, patientLabel: label(s), windowEnd: end.end }] : [];
   });
 
-  const cme = await collectCme(db, institutionId, now, today, tz);
+  const cme = await collectCme(db, institutionId, now, today, tz, rules.cme.invalidReadingsWindowMin?.value);
 
   const candidates = buildAlertCandidates({
     today,
@@ -75,6 +75,11 @@ export async function collectCandidates(db: Kysely<DB>, institutionId: string, n
     rules: {
       investigationOverdueDays: rules.alerts.investigationOverdueDays?.value, deviceReviewDays: rules.alerts.deviceReviewDays?.value,
       ibReadingHours: rules.cme.ibReadingHours?.value, qualificationWarningDays: rules.cme.qualificationWarningDays?.value,
+      cmeStepMaxHours: {
+        recepcao: rules.cme.receptionMaxHours?.value, limpeza: rules.cme.cleaningMaxHours?.value, inspecao: rules.cme.inspectionMaxHours?.value,
+        preparo: rules.cme.preparationMaxHours?.value, embalagem: rules.cme.packagingMaxHours?.value,
+      },
+      loadDecisionMaxHours: rules.cme.loadDecisionMaxHours?.value, invalidReadingsLimit: rules.cme.invalidReadingsLimit?.value, invalidReadingsWindowMin: rules.cme.invalidReadingsWindowMin?.value,
     },
     openCases: cases.map((c) => ({ id: c.id, typeLabel: IRAS_TYPES[c.iras_type].sigla, patientLabel: label(c), openedOn: dateInZone(c.created_at, tz), sectorId: c.sector_id })),
     openDevices: devices.map((d) => ({ id: d.id, type: d.device_type, patientId: d.patient_id, patientLabel: label(d), insertedOn: dateInZone(d.inserted_at, tz), sectorId: d.sector_id })),
@@ -88,7 +93,7 @@ export async function collectCandidates(db: Kysely<DB>, institutionId: string, n
 }
 
 /** CME conditions: recalls, released loads that now fail, failed Bowie-Dick, late IB readings, qualification. */
-async function collectCme(db: Kysely<DB>, institutionId: string, now: Date, today: string, tz: string): Promise<NonNullable<AlertInput['cme']>> {
+async function collectCme(db: Kysely<DB>, institutionId: string, now: Date, today: string, tz: string, refusedWindowMin: number | undefined): Promise<NonNullable<AlertInput['cme']>> {
   const since30 = zonedInstant(addDays(today, -30), 0, tz);
   const [sterilizers, recalls, released, ib, bd] = await Promise.all([
     db.selectFrom('sterilizer').select(['id', 'name', 'type', 'status', 'sector_id', 'qualification_due_on']).where('institution_id', '=', institutionId).execute(),
@@ -119,10 +124,12 @@ async function collectCme(db: Kysely<DB>, institutionId: string, now: Date, toda
     .where('u.institution_id', '=', institutionId).where('u.voided_at', 'is', null).where('u.used_at', '>=', since30)
     .where(({ not, exists, selectFrom }) => not(exists(selectFrom('cme_scan_event as e').select('e.id').whereRef('e.process_id', '=', 'p.id').where('e.step', '=', 'distribuicao').where('e.result', 'in', ['aceita', 'excecao_autorizada']).whereRef('e.server_at', '<=', 'u.used_at'))))
     .execute();
+  const breaks = await collectProcessBreaks(db, institutionId, now, today, tz, refusedWindowMin);
   const { policy } = await loadPolicy(db, institutionId);
   const evals = await evaluateLoads(db, institutionId, released.map((l) => l.id), tz, policy);
   const currentBd = currentOnly(bd);
   return {
+    ...breaks,
     usesWithoutExit: usesWithoutExit.map((u) => ({ useId: u.id, labelCode: u.label_code, processId: u.process_id, usedOn: dateInZone(u.used_at, tz), sectorId: u.sector_id })),
     recalledLoads: recalls.map((r) => ({ loadId: r.id, code: r.code, surgeries: Number(r.surgeries ?? 0), patients: Number(r.patients ?? 0), sectorId: r.sector_id })),
     releasedWithFailure: released.flatMap((l) => {
@@ -134,6 +141,48 @@ async function collectCme(db: Kysely<DB>, institutionId: string, now: Date, toda
     pendingIb: ib.filter((t) => t.result === 'pendente' && !replacedIb.has(t.id) && t.incubation_start)
       .map((t) => ({ testId: t.id, loadId: t.load_id, loadCode: t.code, hours: (now.getTime() - t.incubation_start!.getTime()) / 3_600_000, sectorId: t.sector_id })),
     qualifications: sterilizers.filter((s) => s.status !== 'inativo' && s.qualification_due_on).map((s) => ({ sterilizerId: s.id, name: s.name, dueOn: s.qualification_due_on!, sectorId: s.sector_id })),
+  };
+}
+
+const REFUSED = ['codigo_desconhecido', 'etapa_incorreta', 'bloqueado', 'carga_nao_liberada', 'destino_incompativel', 'requer_conferencia', 'estacao_invalida'] as const;
+const TIMED_STEPS = ['recepcao', 'limpeza', 'inspecao', 'preparo', 'embalagem'] as const;
+type TimedStep = (typeof TIMED_STEPS)[number];
+
+/** Process-break conditions read from the flow records (reading events, processes, loads). */
+async function collectProcessBreaks(db: Kysely<DB>, institutionId: string, now: Date, today: string, tz: string, refusedWindowMin: number | undefined) {
+  const startOfDay = zonedInstant(today, 0, tz);
+  const [stalled, awaiting, refused, incompatible, exits] = await Promise.all([
+    // Open rounds waiting at a timed step: hours since the last accepted reading of the round.
+    db.selectFrom('cme_process as p')
+      .innerJoin('cme_scan_event as e', (j) => j.onRef('e.process_id', '=', 'p.id').on('e.result', 'in', ['aceita', 'excecao_autorizada']))
+      .leftJoin('scan_station as s', 's.id', 'e.station_id')
+      .select((eb) => ['p.id', 'p.code', 'p.description', 'p.current_step', eb.fn.max('e.server_at').as('last_at'), sql<string | null>`max(s.sector_id::text)`.as('sector_id')])
+      .where('p.institution_id', '=', institutionId).where('p.state', '=', 'em_processo').where('p.current_step', 'in', [...TIMED_STEPS])
+      .groupBy(['p.id', 'p.code', 'p.description', 'p.current_step']).execute(),
+    db.selectFrom('sterilization_load as l').innerJoin('sterilizer as st', 'st.id', 'l.sterilizer_id').select(['l.id', 'l.code', 'l.ended_at', 'st.sector_id'])
+      .where('l.institution_id', '=', institutionId).where('l.status', '=', 'aguardando').where('l.ended_at', 'is not', null).execute(),
+    refusedWindowMin
+      ? db.selectFrom('cme_scan_event as e').innerJoin('scan_station as s', 's.id', 'e.station_id').select((eb) => ['s.id', 's.name', 's.sector_id', eb.fn.countAll<string>().as('n')])
+        .where('e.institution_id', '=', institutionId).where('e.result', 'in', [...REFUSED]).where('e.server_at', '>=', new Date(now.getTime() - refusedWindowMin * 60_000))
+        .groupBy(['s.id', 's.name', 's.sector_id']).execute()
+      : Promise.resolve([]),
+    db.selectFrom('cme_scan_event as e').innerJoin('scan_station as s', 's.id', 'e.station_id').select((eb) => ['s.id', 's.name', 's.sector_id', eb.fn.countAll<string>().as('n')])
+      .where('e.institution_id', '=', institutionId).where('e.result', '=', 'estacao_invalida').where('e.server_at', '>=', startOfDay)
+      .groupBy(['s.id', 's.name', 's.sector_id']).execute(),
+    db.selectFrom('cme_scan_event as e').innerJoin('cme_process as p', 'p.id', 'e.process_id').leftJoin('sterilization_load as l', 'l.id', 'e.load_id').leftJoin('scan_station as s', 's.id', 'e.station_id')
+      .select((eb) => ['p.id', 'p.code', 'p.description', eb.fn.max('l.code').as('load_code'), eb.fn.max('e.server_at').as('last_at'), sql<string | null>`max(s.sector_id::text)`.as('sector_id')])
+      .where('e.institution_id', '=', institutionId).where('e.result', '=', 'carga_nao_liberada').where('e.step', 'in', ['separacao', 'distribuicao'])
+      .where('e.server_at', '>=', zonedInstant(addDays(today, -30), 0, tz))
+      .groupBy(['p.id', 'p.code', 'p.description']).execute(),
+  ]);
+  const label = (p: { code: string | null; description: string }) => (p.code ? `${p.description} (${p.code})` : p.description);
+  const hoursSince = (d: Date) => (now.getTime() - d.getTime()) / 3_600_000;
+  return {
+    stalledProcesses: stalled.map((p) => ({ processId: p.id, label: label(p), step: p.current_step as TimedStep, hours: hoursSince(new Date(p.last_at as Date)), sectorId: (p.sector_id as string | null) ?? null })),
+    loadsAwaitingDecision: awaiting.map((l) => ({ loadId: l.id, code: l.code, hours: hoursSince(l.ended_at!), sectorId: l.sector_id })),
+    refusedReadings: refused.map((r) => ({ stationId: r.id, stationName: r.name, count: Number(r.n), sectorId: r.sector_id })),
+    incompatibleStations: incompatible.map((r) => ({ stationId: r.id, stationName: r.name, count: Number(r.n), sectorId: r.sector_id })),
+    exitsWithoutRelease: exits.map((x) => ({ processId: x.id, label: label(x), loadCode: (x.load_code as string | null) ?? null, on: dateInZone(new Date(x.last_at as Date), tz), sectorId: (x.sector_id as string | null) ?? null })),
   };
 }
 
