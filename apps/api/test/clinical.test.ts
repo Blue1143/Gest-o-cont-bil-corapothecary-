@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'kysely';
+import { todayIn } from '@ccih/domain';
 import { login, setupTestApp, teardown, type Session, type TestContext } from './helpers';
 
 let ctx: TestContext;
@@ -20,6 +21,9 @@ beforeAll(async () => {
   [enf, auditor, infecto] = await Promise.all([login(ctx.app, 'enf.ccih'), login(ctx.app, 'auditor'), login(ctx.app, 'infecto')]);
 });
 afterAll(async () => teardown(ctx));
+
+/** "Today" as the institution sees it (its time zone, not UTC: late evening in Brazil is already tomorrow in UTC). */
+const institutionToday = async () => todayIn((await ctx.db.selectFrom('institution').select('timezone').executeTakeFirstOrThrow()).timezone);
 
 describe('synthetic clinical seed', () => {
   it('populates inpatients, census and consolidated facts flagged as demo', async () => {
@@ -127,7 +131,7 @@ describe('IRAS surveillance workflow', () => {
       .where('device_use.inserted_at', '<', new Date(Date.now() - 4 * 86_400_000)).where('device_use.removed_at', 'is', null).orderBy('device_use.inserted_at').executeTakeFirstOrThrow();
     admissionId = adm.id;
     deviceId = adm.device_id;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await institutionToday();
     const res = await api(enf, 'POST', '/iras', { admissionId, type: 'IPCS', eventDate: today, sectorId: adm.sector_id, description: 'Febre e hemocultura positiva (teste).', deviceUseId: deviceId, surgeryId: null, cultureIds: [], justification: 'Busca ativa identificou critérios iniciais' });
     expect(res.statusCode).toBe(201);
     caseId = res.json().id;
@@ -165,7 +169,7 @@ describe('IRAS surveillance workflow', () => {
   });
 
   it('counts the confirmed case when the month is consolidated (audited)', async () => {
-    const month = `${new Date().toISOString().slice(0, 7)}-01`;
+    const month = `${(await institutionToday()).slice(0, 7)}-01`;
     const res = await api(enf, 'POST', '/facts/consolidate', { months: [month] });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ partialMonth: true, origin: 'demo' });

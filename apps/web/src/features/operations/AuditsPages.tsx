@@ -266,6 +266,7 @@ function NcDetail() {
           {NC_TRANSITIONS[n.status].map((to) => <Button key={to} variant={to === 'cancelada' ? 'danger' : 'primary'} onClick={() => setAction(to)}>{NC_STATUS_LABEL[to]}</Button>)}
         </> : null} />
       {n.auditId ? <p className="ig-small" style={{ margin: 0 }}>Auditoria de origem: <Link to={`/auditorias/${n.auditId}`}>{n.auditTitle}</Link></p> : null}
+      {n.source?.entity === 'material_use' ? <p className="ig-small" style={{ margin: 0 }}>Aberta automaticamente pela regra de saída da CME (uso de pacote sem saída registrada){n.notifiedUserName ? <> · notificado: {n.notifiedUserName}</> : null}.</p> : null}
       {action === 'plan' ? <ActionForm ncId={n.id} onDone={() => setAction(null)} /> : null}
       {action && typeof action === 'object' ? <ActionStatusForm action={action.status} onDone={() => setAction(null)} /> : null}
       {typeof action === 'string' && action !== 'plan' ? <NcStatusForm nc={n} to={action} onDone={() => setAction(null)} /> : null}

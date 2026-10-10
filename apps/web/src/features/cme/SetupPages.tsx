@@ -52,8 +52,8 @@ function FlowSetup() {
           <dl className="ig-facts">
             <div><dt>Armazenamento</dt><dd>{c.storageRequired ? 'Obrigatório' : 'Opcional'}</dd></div>
             <div><dt>Separação e conferência</dt><dd>{c.separationRequired ? 'Obrigatória' : 'Opcional'}</dd></div>
-            <div><dt>Uso sem saída registrada</dt><dd>{c.exitRequiredFrom ? `Bloqueado a partir de ${formatDate(c.exitRequiredFrom)}` : 'Aceito com alerta (período de transição)'}</dd></div>
-            <div><dt>Conferência manual</dt><dd>{c.manualRequiresJustification ? 'Exige justificativa' : 'Sem justificativa obrigatória'}</dd></div>
+            <div><dt>Uso sem saída registrada</dt><dd>Não bloqueia: abre não conformidade e notifica quem registrou o uso</dd></div>
+            <div><dt>Conferência manual</dt><dd>Sem justificativa; o material segue para a próxima etapa</dd></div>
           </dl>
         )}
       </Card>
@@ -66,16 +66,14 @@ function FlowSetup() {
 
 function FlowForm({ config, onDone }: { config: FlowConfigDto; onDone: () => void }) {
   const cme = useCme()!;
-  const [d, setD] = useState({ ...config, exitRequiredFrom: config.exitRequiredFrom ?? '', justification: '' });
+  const [d, setD] = useState({ ...config, justification: '' });
   const [error, setError] = useState<string | undefined>();
-  const m = useCmeMutation(() => cme.saveFlowConfig({ storageRequired: d.storageRequired, separationRequired: d.separationRequired, exitRequiredFrom: d.exitRequiredFrom || null, manualRequiresJustification: d.manualRequiresJustification, rowVersion: config.rowVersion, justification: d.justification.trim() }));
+  const m = useCmeMutation(() => cme.saveFlowConfig({ storageRequired: d.storageRequired, separationRequired: d.separationRequired, rowVersion: config.rowVersion, justification: d.justification.trim() }));
   return (
     <form className="ig-form" noValidate onSubmit={(e) => { e.preventDefault(); const j = justificationError(d.justification); setError(j); if (!j) m.mutation.mutate(undefined, { onSuccess: onDone }); }}>
       {m.formError ? <FormMessage tone="error">{m.formError}</FormMessage> : null}
       <label className="inline-check"><input type="checkbox" checked={d.storageRequired} onChange={(e) => setD({ ...d, storageRequired: e.target.checked })} /> Armazenamento obrigatório</label>
       <label className="inline-check"><input type="checkbox" checked={d.separationRequired} onChange={(e) => setD({ ...d, separationRequired: e.target.checked })} /> Separação e conferência obrigatórias</label>
-      <label className="inline-check"><input type="checkbox" checked={d.manualRequiresJustification} onChange={(e) => setD({ ...d, manualRequiresJustification: e.target.checked })} /> Conferência manual exige justificativa</label>
-      <Field label="Bloquear uso sem saída registrada a partir de" hint="Em branco: período de transição (o uso é aceito e gera alerta)."><input type="date" value={d.exitRequiredFrom} onChange={(e) => setD({ ...d, exitRequiredFrom: e.target.value })} /></Field>
       <JustificationField value={d.justification} onChange={(v) => setD({ ...d, justification: v })} error={error} />
       <div className="ig-form-actions"><Button type="submit" variant="primary" disabled={m.mutation.isPending}>Salvar</Button><Button onClick={onDone}>Cancelar</Button></div>
     </form>

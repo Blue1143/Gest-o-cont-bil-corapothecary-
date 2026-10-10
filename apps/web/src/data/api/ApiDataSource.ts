@@ -1,5 +1,5 @@
 import type { FactRow, InstitutionData, WithProvenance } from '@ccih/domain';
-import type { AdminPort, AuthPort, CcihDataSource, ClinicalPort, CmePort, FactsQuery, OperationsPort, OrgAdminPort, SessionInfo } from '../port';
+import type { AdminPort, AuthPort, CcihDataSource, ClinicalPort, CmePort, FactsQuery, InboxPort, OperationsPort, OrgAdminPort, SessionInfo } from '../port';
 import { createHttpClient, type HttpClient } from './http';
 
 /** Backend source: every authorization decision is taken by the API; the UI only reflects it. */
@@ -11,6 +11,7 @@ export class ApiDataSource implements CcihDataSource {
   readonly orgAdmin: OrgAdminPort;
   readonly operations: OperationsPort;
   readonly cme: CmePort;
+  readonly inbox: InboxPort;
   private readonly http: HttpClient;
 
   constructor(base = '/api', onUnauthorized: () => void = () => {}) {
@@ -102,8 +103,8 @@ export class ApiDataSource implements CcihDataSource {
       createTest: (input) => http.send('POST', '/cme/tests', input),
       replaceTest: (t, input) => http.send('POST', `/cme/tests/${id(t)}/replace`, input),
       trace: (q) => http.get('/cme/trace', { q }),
-      addSurgeryMaterial: (sid, input) => ok(http.send('POST', `/surgeries/${id(sid)}/materials`, input)),
-      addLooseUse: (input) => ok(http.send('POST', '/cme/uses', input)),
+      addSurgeryMaterial: (sid, input) => http.send('POST', `/surgeries/${id(sid)}/materials`, input),
+      addLooseUse: (input) => http.send('POST', '/cme/uses', input),
       voidUse: (u, justification) => ok(http.send('POST', `/material-uses/${id(u)}/void`, { justification })),
       upload: (entity, entityId, file) => http.upload(`/attachments?entity=${entity}&entityId=${id(entityId)}`, file),
       attachmentUrl: (a) => `${base}/attachments/${id(a)}`,
@@ -124,6 +125,11 @@ export class ApiDataSource implements CcihDataSource {
       processes: (q) => http.get('/cme/processes', q),
       process: (p) => http.get(`/cme/processes/${id(p)}`),
       scanEvents: (q) => http.get('/cme/scan-events', q),
+    };
+    this.inbox = {
+      notifications: (q) => http.get(`/me/notifications?situacao=${q.situacao}`),
+      markRead: (n) => ok(http.send('POST', `/me/notifications/${id(n)}/read`)),
+      markAllRead: () => ok(http.send('POST', '/me/notifications/read-all')),
     };
     this.operations = {
       bundleTemplates: () => http.get('/bundles/templates'),

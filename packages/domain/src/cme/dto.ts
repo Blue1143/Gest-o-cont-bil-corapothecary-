@@ -84,7 +84,7 @@ export interface SurgeryMaterialDto {
 
 /* ---------- Processing flow and reading stations ---------- */
 
-export interface FlowConfigDto { storageRequired: boolean; separationRequired: boolean; exitRequiredFrom: string | null; manualRequiresJustification: boolean; rowVersion: number }
+export interface FlowConfigDto { storageRequired: boolean; separationRequired: boolean; rowVersion: number }
 
 /** How a workstation tells a keyboard-wedge (HID) reader from a person typing. */
 export interface ScanConfig { maxKeyIntervalMs: number; minLength: number; terminator: 'enter' | 'tab' | 'nenhum' }
@@ -126,3 +126,6 @@ export interface ScanResponse {
 
 /** Institution sectors as the CME sees them: destinations and use places are hospital-wide, whatever the user's clinical scope. */
 export interface CmeSectorDto { id: string; code: string; name: string; kind: SectorKind; active: boolean }
+
+/** Result of recording a package use. A missing CME exit does not block: it opens a non-conformity. */
+export interface UseRecorded { id: string; withoutExit: boolean; nonconformityId: string | null }

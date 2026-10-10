@@ -106,7 +106,6 @@ export async function scan(db: Kysely<DB>, auth: AuthContext, actor: AuditActor,
       if (!station.steps.includes(input.step)) return refuse('estacao_invalida', `Esta estação não registra ${PROCESS_STEP_LABEL[input.step].toLowerCase()}.`);
       if (!station.input_methods.includes(input.inputMethod)) return refuse('estacao_invalida', 'Método de entrada não habilitado nesta estação.');
       if (station.require_pairing && !deviceId) return refuse('estacao_invalida', 'Este computador não está pareado com a estação.');
-      if (input.inputMethod === 'manual' && config.manualRequiresJustification && !input.justification) return refuse('requer_conferencia', 'Conferência manual exige justificativa nesta instituição.');
 
       // 2. Code: format, symbology, registered or issued by the system.
       if (parsed.problem) return refuse('codigo_desconhecido', parsed.problem);

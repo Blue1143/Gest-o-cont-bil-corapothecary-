@@ -21,7 +21,7 @@ const PROCESS: ProcessSummaryDto = {
   nextSteps: ['limpeza'], packageLabel: null, loadId: null, loadCode: null, loadStatus: null, destinationSectorId: null, openedAt: '2026-10-09T12:00:00Z', closedAt: null, legacy: false, origin: 'demo',
 };
 
-function fakeSource(role: RoleCode, scan: CmePort['scan']) {
+function fakeSource(role: RoleCode, scan: CmePort['scan'], station: StationDto = STATION) {
   const demo = new DemoDataSource(() => new Date('2026-10-09T15:00:00Z'));
   const auth: AuthPort = {
     me: async () => ({ user: { id: 'u1', login: role, displayName: 'Operador' }, roles: [role], permissions: DEFAULT_ROLE_PERMISSIONS[role], scope: null, session: { expiresAt: '2026-10-09T23:00:00Z', idleExpiresAt: '2026-10-09T16:00:00Z', idleMinutes: 30 }, mustChangePassword: false }),
@@ -29,7 +29,7 @@ function fakeSource(role: RoleCode, scan: CmePort['scan']) {
   };
   const cme = {
     sectors: vi.fn(async () => ({ sectors: [{ id: 'cc', code: 'cc', name: 'Centro Cirúrgico', kind: 'centro_cirurgico', active: true }, { id: 'cme', code: 'cme', name: 'CME', kind: 'cme', active: true }] })),
-    stations: vi.fn(async () => ({ stations: [STATION] })),
+    stations: vi.fn(async () => ({ stations: [station] })),
     thisStation: vi.fn(async () => ({ station: null, deviceId: null })),
     scanEvents: vi.fn(async () => ({ events: [] })),
     processes: vi.fn(async () => ({ rows: [PROCESS], total: 1, page: 1, pageSize: 25 })),
@@ -115,6 +115,17 @@ describe('reading station', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Repetir envio' }));
     await waitFor(() => expect(cme.scan).toHaveBeenCalledTimes(2));
     expect(vi.mocked(cme.scan).mock.calls[1]![0].clientEventId).toBe(vi.mocked(cme.scan).mock.calls[0]![0].clientEventId);
+  });
+
+  it('after a manual conference, offers to continue at the next step when this station handles it', async () => {
+    const both: StationDto = { ...STATION, steps: ['limpeza', 'inspecao'] };
+    const { source, cme } = fakeSource('cme', async () => accepted(), both);
+    renderAt(source, '/cme/estacao?estacao=st1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar Caixa de laparotomia AT-K7M2Q9X4' }));
+    expect(vi.mocked(cme.scan).mock.calls[0]![0]).toMatchObject({ inputMethod: 'manual', step: 'limpeza', justification: null });
+    await userEvent.click(await screen.findByRole('button', { name: 'Continuar: Inspeção' }));
+    expect(await screen.findByRole('button', { name: 'Inspeção', pressed: true })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continuar: Inspeção' })).not.toBeInTheDocument();
   });
 
   it('lets the operator confirm a material manually when there is no reader', async () => {

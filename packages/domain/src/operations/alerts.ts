@@ -128,7 +128,7 @@ export function buildAlertCandidates(input: AlertInput): AlertCandidate[] {
       out.push({ kind: 'cme_carga_recolhida', oneShot: true, dedupKey: `recolhe:${l.loadId}`, priority: l.surgeries ? 'alta' : 'media', title: `Carga ${l.code} recolhida`, detail: exposure, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });
     }
     for (const u of input.cme.usesWithoutExit ?? []) {
-      out.push({ kind: 'cme_uso_sem_saida', oneShot: true, dedupKey: `semsaida:${u.useId}`, priority: 'media', title: `Pacote ${u.labelCode} usado sem saída do CME`, detail: `Uso em ${u.usedOn.split('-').reverse().join('/')}. Registre a distribuição na expedição para manter a trilha completa.`, entity: 'cme_process', entityId: u.processId, sectorId: u.sectorId, link: `/cme/processos/${u.processId}` });
+      out.push({ kind: 'cme_uso_sem_saida', oneShot: true, dedupKey: `semsaida:${u.useId}`, priority: 'media', title: `Pacote ${u.labelCode} usado sem saída do CME`, detail: `Uso em ${u.usedOn.split('-').reverse().join('/')}. O uso não foi bloqueado: foi aberta uma não conformidade e quem registrou o uso foi notificado. Revise com a expedição por que a saída não foi lida.`, entity: 'cme_process', entityId: u.processId, sectorId: u.sectorId, link: `/cme/processos/${u.processId}` });
     }
     for (const l of input.cme.releasedWithFailure) {
       out.push({ kind: 'cme_liberada_com_falha', dedupKey: `falha:${l.loadId}`, priority: 'alta', title: `Carga ${l.code} liberada com teste reprovado`, detail: `${l.reason} Avaliar o recolhimento dos pacotes e a exposição de pacientes.`, entity: 'sterilization_load', entityId: l.loadId, sectorId: l.sectorId, link: `/cme/cargas/${l.loadId}` });

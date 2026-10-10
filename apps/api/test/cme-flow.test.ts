@@ -89,7 +89,9 @@ describe('continuous traceability from reception to use and back', () => {
 
     // Use in surgery, then the box comes back dirty: a new round starts at reception.
     const surgery = (await ctx.db.selectFrom('surgery').select('id').orderBy('started_at', 'desc').limit(1).executeTakeFirstOrThrow()).id;
-    expect((await api(enf, 'POST', `/surgeries/${surgery}/materials`, { labelCode: label, usedAt: null })).statusCode).toBe(201);
+    const used = await api(enf, 'POST', `/surgeries/${surgery}/materials`, { labelCode: label, usedAt: null });
+    expect(used.statusCode).toBe(201);
+    expect(used.json()).toMatchObject({ withoutExit: false, nonconformityId: null });
     const again = await read(cme, 'Expurgo — recepção', 'recepcao', asset);
     expect(again).toMatchObject({ result: 'aceita', process: { currentStep: 'recepcao' } });
     const previous = await ctx.db.selectFrom('cme_process').select(['state', 'closed_at']).where('id', '=', packed.process.id).executeTakeFirstOrThrow();
@@ -102,7 +104,7 @@ describe('continuous traceability from reception to use and back', () => {
     expect(history.events.every((e: { userName: string; stationName: string; serverAt: string }) => e.userName && e.stationName && e.serverAt)).toBe(true);
   });
 
-  it('accepts use without registered exit only as an alert during the transition period', async () => {
+  it('never blocks a use without registered exit: it opens a non-conformity and notifies the user who recorded it', async () => {
     const asset = await newAsset();
     for (const [st, step, outcome] of [['Expurgo — recepção', 'recepcao'], ['Limpeza', 'limpeza'], ['Inspeção e preparo', 'inspecao', 'aprovado'], ['Inspeção e preparo', 'preparo'], ['Embalagem', 'embalagem']] as const) {
       expect((await read(cme, st, step, asset, outcome ? { outcome } : {})).result).toBe('aceita');
@@ -111,14 +113,47 @@ describe('continuous traceability from reception to use and back', () => {
     const label = (await read(cme, 'Montagem de carga', 'esterilizacao', asset, { loadId: load.id })).process.packageLabel;
     await releasePlasmaLoad(load.id);
     const surgery = (await ctx.db.selectFrom('surgery').select('id').orderBy('started_at', 'desc').limit(1).executeTakeFirstOrThrow()).id;
+    // The old blocking date no longer exists in the flow settings.
     const config = (await api(cme, 'GET', '/cme/flow-config')).json();
-    expect((await api(cme, 'PUT', '/cme/flow-config', { ...config, exitRequiredFrom: '2020-01-01', justification: J })).statusCode).toBe(200);
-    expect((await api(enf, 'POST', `/surgeries/${surgery}/materials`, { labelCode: label, usedAt: null })).json().message).toMatch(/sem saída registrada/);
-    const now = (await api(cme, 'GET', '/cme/flow-config')).json();
-    expect((await api(cme, 'PUT', '/cme/flow-config', { ...now, exitRequiredFrom: null, justification: J })).statusCode).toBe(200);
-    expect((await api(enf, 'POST', `/surgeries/${surgery}/materials`, { labelCode: label, usedAt: null })).statusCode).toBe(201);
+    expect(Object.keys(config).sort()).toEqual(['rowVersion', 'separationRequired', 'storageRequired']);
+    expect((await api(cme, 'PUT', '/cme/flow-config', { ...config, exitRequiredFrom: '2020-01-01', justification: J })).statusCode).toBe(400);
+
+    const before = (await api(enf, 'GET', '/me/notifications')).json().unread as number;
+    const res = await api(enf, 'POST', `/surgeries/${surgery}/materials`, { labelCode: label, usedAt: null });
+    expect(res.statusCode).toBe(201);
+    const { id: useId, withoutExit, nonconformityId } = res.json();
+    expect(withoutExit).toBe(true);
+    const enfUser = await ctx.db.selectFrom('app_user').select('id').where('login', '=', 'enf.ccih').executeTakeFirstOrThrow();
+    const nc = await ctx.db.selectFrom('nonconformity').selectAll().where('id', '=', nonconformityId).executeTakeFirstOrThrow();
+    expect(nc).toMatchObject({ origin: 'cme', status: 'aberta', notified_user_id: enfUser.id, source_entity: 'material_use', source_id: useId });
+    expect(nc.description).toContain(label);
+    expect(nc.description).toMatch(/sem saída registrada do CME/);
     const process = await ctx.db.selectFrom('cme_process').select('state').where('asset_id', '=', (await ctx.db.selectFrom('instrument_asset').select('id').where('code', '=', asset).executeTakeFirstOrThrow()).id).executeTakeFirstOrThrow();
     expect(process.state).toBe('distribuido');
+    expect(await ctx.db.selectFrom('audit_log').select('id').where('entity', '=', 'nonconformity').where('entity_id', '=', nonconformityId).executeTakeFirst()).toBeTruthy();
+
+    // The NC shows where it came from and who was notified.
+    const dto = (await api(enf, 'GET', `/quality/nonconformities/${nonconformityId}`)).json();
+    expect(dto).toMatchObject({ source: { entity: 'material_use', id: useId }, notifiedUserName: expect.any(String) });
+
+    // Only the user who recorded the use receives the notification.
+    const inbox = (await api(enf, 'GET', '/me/notifications')).json();
+    expect(inbox.unread).toBe(before + 1);
+    const note = inbox.rows.find((n: { entityId: string }) => n.entityId === nonconformityId);
+    expect(note).toMatchObject({ kind: 'nao_conformidade', link: `/auditorias/nao-conformidades/${nonconformityId}`, readAt: null });
+    expect((await api(cme, 'GET', '/me/notifications?situacao=todas')).json().rows.some((n: { entityId: string }) => n.entityId === nonconformityId)).toBe(false);
+    expect((await api(cme, 'POST', `/me/notifications/${note.id}/read`)).statusCode).toBe(404);
+    expect((await api(enf, 'POST', `/me/notifications/${note.id}/read`)).statusCode).toBe(200);
+    expect((await api(enf, 'GET', '/me/notifications')).json().unread).toBe(before);
+    expect((await api(enf, 'GET', '/me/notifications?situacao=todas')).json().rows.find((n: { id: string }) => n.id === note.id).readAt).toBeTruthy();
+    // Notifications are kept: the database refuses to delete them.
+    await expect(ctx.owner.deleteFrom('user_notification').where('id', '=', note.id).execute()).rejects.toThrow(/não podem ser excluídos/);
+  });
+
+  it('needs no justification for a manual conference, and the material goes on to the next step', async () => {
+    const asset = await newAsset();
+    expect(await read(cme, 'Expurgo — recepção', 'recepcao', asset, { inputMethod: 'manual' })).toMatchObject({ result: 'aceita', process: { nextSteps: ['limpeza'] } });
+    expect(await read(cme, 'Limpeza', 'limpeza', asset, { inputMethod: 'manual' })).toMatchObject({ result: 'aceita', process: { currentStep: 'limpeza', nextSteps: ['inspecao'] } });
   });
 
   it('raises an alert for a use without registered exit', async () => {

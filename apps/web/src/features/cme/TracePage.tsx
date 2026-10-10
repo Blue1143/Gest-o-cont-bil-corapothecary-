@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LOAD_STATUS_LABEL, formatDate, type TraceRow } from '@ccih/domain';
+import { LOAD_STATUS_LABEL, formatDate, type TraceRow, type UseRecorded } from '@ccih/domain';
 import { AlertBanner, Button, DataTable, Field, TraceTimeline, type Column, type TraceStep } from '@ccih/ui';
 import { useSession } from '../auth/session';
 import { FormCard } from '../clinical/patient-forms';
@@ -22,6 +22,7 @@ function Trace() {
   const q = f.get('q');
   const [term, setTerm] = useState(q);
   const [loose, setLoose] = useState(false);
+  const [withoutExit, setWithoutExit] = useState(false);
   const result = useQuery({ queryKey: ['cme', 'trace', q], enabled: q.length >= 3, queryFn: () => cme.trace(q) });
   const usage = (r: TraceRow) => {
     if (!r.use) return <span className="ig-muted">Não utilizado</span>;
@@ -43,7 +44,8 @@ function Trace() {
     <div className="page">
       <PageHeader title="Rastreabilidade" subtitle="Do pacote ao ciclo e ao paciente, e do paciente aos pacotes usados. Pesquise pela etiqueta do pacote, pelo código da carga, pelo código da caixa ou pelo prontuário."
         actions={session.can('cme:edit') && !loose ? <Button onClick={() => setLoose(true)}>Registrar uso sem cirurgia</Button> : null} />
-      {loose ? <LooseUseForm onDone={() => setLoose(false)} /> : null}
+      {loose ? <LooseUseForm onDone={(r) => { setLoose(false); setWithoutExit(!!r?.withoutExit); }} /> : null}
+      {withoutExit ? <AlertBanner tone="warn" title="Não conformidade aberta">Uso registrado. O pacote não tinha saída registrada do CME: foi aberta uma não conformidade e você recebeu uma notificação.</AlertBanner> : null}
       <form className="filters" role="search" onSubmit={(e) => { e.preventDefault(); f.set('q', term.trim()); }}>
         <div className="field" style={{ flex: '1 1 260px' }}>
           <label htmlFor="trace-q">Etiqueta, carga, caixa ou prontuário</label>
@@ -75,7 +77,7 @@ function traceSteps(r: TraceRow): TraceStep[] {
   ];
 }
 
-function LooseUseForm({ onDone }: { onDone: () => void }) {
+function LooseUseForm({ onDone }: { onDone: (recorded?: UseRecorded) => void }) {
   const cme = useCme()!;
   const sectors = useCmeSectors();
   const tz = useTimeZone();
@@ -85,12 +87,12 @@ function LooseUseForm({ onDone }: { onDone: () => void }) {
   const submit = () => {
     const e = { labelCode: d.labelCode.trim().length >= 3 ? undefined : 'Informe a etiqueta.', sectorId: d.sectorId ? undefined : 'Informe o setor.' };
     setErrors(e);
-    if (!Object.values(e).some(Boolean)) m.mutation.mutate(undefined, { onSuccess: onDone });
+    if (!Object.values(e).some(Boolean)) m.mutation.mutate(undefined, { onSuccess: (r) => onDone(r) });
   };
   const err = (k: string) => errors[k] ?? m.fieldErrors[k] ?? null;
   return (
     <FormCard title="Registrar uso sem cirurgia" subtitle="Para materiais usados no setor (ex.: kit de curativo). Sem paciente vinculado, o uso conta como lacuna no indicador de rastreabilidade."
-      error={m.formError} onSubmit={submit} onCancel={onDone} busy={m.mutation.isPending} submitLabel="Registrar uso">
+      error={m.formError} onSubmit={submit} onCancel={() => onDone()} busy={m.mutation.isPending} submitLabel="Registrar uso">
       <div className="ig-form-row">
         <Field label="Etiqueta do pacote" required error={err('labelCode')}><input value={d.labelCode} maxLength={60} onChange={(e) => setD({ ...d, labelCode: e.target.value })} /></Field>
         <Field label="Setor" required error={err('sectorId')}><select value={d.sectorId} onChange={(e) => setD({ ...d, sectorId: e.target.value })}><option value="">Selecione</option>{sectors.data?.sectors.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>

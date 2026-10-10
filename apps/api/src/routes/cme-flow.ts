@@ -11,14 +11,14 @@ import type { Env } from '../env';
 import { audit } from '../audit/audit';
 import { actorOf, requireAuth, requirePermission, type AuthContext } from '../http/auth';
 import { HttpError, conflict, forbidden, notFound, parse } from '../http/errors';
-import { Instant, IsoDate, Justification, OptionalText, PageQuery, RowVersion, Text, Uuid, notFuture } from '../http/schemas';
+import { Instant, Justification, OptionalText, PageQuery, RowVersion, Text, Uuid, notFuture } from '../http/schemas';
 import { sha256 } from '../security/crypto';
 import { assertSector, escapeLike, institutionOrigin } from '../repositories/clinical';
 import { loadFlowConfig, processSummaries, scanEventDtos, stationDtos } from '../repositories/cme-flow';
 import { STATION_COOKIE, deviceOf, receiveLoose, scan } from '../services/scan';
 
 const STEP = z.enum(SCANNABLE_STEPS as [string, ...string[]]);
-const FlowBody = z.object({ storageRequired: z.boolean(), separationRequired: z.boolean(), exitRequiredFrom: IsoDate.nullable(), manualRequiresJustification: z.boolean(), rowVersion: z.number().int().min(0), justification: Justification }).strict();
+const FlowBody = z.object({ storageRequired: z.boolean(), separationRequired: z.boolean(), rowVersion: z.number().int().min(0), justification: Justification }).strict();
 const StationBody = z
   .object({
     sectorId: Uuid, name: Text(80), location: OptionalText(120), steps: z.array(STEP).min(1).max(11), inputMethods: z.array(z.enum(['leitor', 'camera', 'manual'])).min(1),
@@ -69,7 +69,7 @@ export async function cmeFlowRoutes(app: FastifyInstance, { db, env }: { db: Kys
     return db.transaction().execute(async (trx) => {
       const before = await trx.selectFrom('cme_flow_config').selectAll().where('institution_id', '=', auth.institutionId).forUpdate().executeTakeFirst();
       if ((before?.row_version ?? 0) !== b.rowVersion) throw conflict();
-      const values = { storage_required: b.storageRequired, separation_required: b.separationRequired, exit_required_from: b.exitRequiredFrom, manual_requires_justification: b.manualRequiresJustification, updated_at: new Date() };
+      const values = { storage_required: b.storageRequired, separation_required: b.separationRequired, updated_at: new Date() };
       const after = before
         ? await trx.updateTable('cme_flow_config').set({ ...values, row_version: before.row_version + 1 }).where('institution_id', '=', auth.institutionId).returningAll().executeTakeFirstOrThrow()
         : await trx.insertInto('cme_flow_config').values({ institution_id: auth.institutionId, ...values }).returningAll().executeTakeFirstOrThrow();

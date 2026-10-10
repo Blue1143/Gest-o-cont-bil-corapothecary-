@@ -13,7 +13,7 @@ import { HttpError, conflict, notFound, parse } from '../http/errors';
 import { Instant, IsoDate, Justification, OptionalText, PageQuery, RowVersion, Text, Uuid, notFuture } from '../http/schemas';
 import { assertSector, escapeLike, institutionOrigin, surgerySummaries, type Db } from '../repositories/clinical';
 import { currentOnly, evaluateLoads, loadPolicy, testDtos, traceRows, materialUseDtos } from '../repositories/cme';
-import { loadFlowConfig } from '../repositories/cme-flow';
+import { openUseWithoutExitNc } from '../services/notifications';
 
 const PACKAGING = z.enum(['papel_grau_cirurgico', 'sms', 'container_rigido', 'tecido_algodao', 'outro']);
 const LOAD_STATUS = z.enum(['aguardando', 'liberada', 'retida', 'rejeitada', 'reprocessamento']);
@@ -106,7 +106,7 @@ async function findLoad(db: Db, auth: AuthContext, id: string) {
 /** A package by its printed label, with what decides whether it can be used. */
 async function findItemByLabel(db: Db, auth: AuthContext, labelCode: string) {
   const item = await db.selectFrom('load_item as i').innerJoin('sterilization_load as l', 'l.id', 'i.load_id').innerJoin('sterilizer as s', 's.id', 'l.sterilizer_id')
-    .select(['i.id', 'i.label_code', 'i.expires_on', 'i.set_id', 'i.process_id', 'l.status', 'l.code', 's.sector_id as cme_sector'])
+    .select(['i.id', 'i.label_code', 'i.description', 'i.expires_on', 'i.set_id', 'i.process_id', 'l.status', 'l.code', 's.sector_id as cme_sector'])
     .where('i.institution_id', '=', auth.institutionId).where('i.label_code', '=', labelCode).executeTakeFirst();
   if (!item) throw fieldError('labelCode', 'Etiqueta não encontrada. Confira o código impresso no pacote.');
   const used = await db.selectFrom('material_use').select('id').where('item_id', '=', item.id).where('voided_at', 'is', null).executeTakeFirst();
@@ -525,22 +525,25 @@ export async function cmeRoutes(app: FastifyInstance, { db }: { db: Kysely<DB> }
     const item = await findItemByLabel(db, auth, labelCode);
     const problems = checkItemUse({ loadStatus: item.status, expiresOn: item.expires_on, alreadyUsed: item.alreadyUsed }, dateInZone(usedAt, tz));
     if (problems.length) throw problemsError(problems);
-    // Packages tracked by the flow must have left the CME. During the configured transition the use is
-    // accepted and the missing exit becomes an alert; from the configured date on it is refused.
+    // Packages tracked by the flow should have left the CME. A missing exit never blocks the use
+    // (institutional decision): it opens a non-conformity and notifies the user who recorded the use.
     const process = item.process_id ? await db.selectFrom('cme_process').select(['id', 'state', 'row_version']).where('id', '=', item.process_id).executeTakeFirst() : null;
     const withoutExit = !!process && process.state !== 'distribuido';
-    if (withoutExit) {
-      const config = await loadFlowConfig(db, auth.institutionId);
-      if (config.exitRequiredFrom && dateInZone(new Date(), tz) >= config.exitRequiredFrom) throw fieldError('labelCode', 'Pacote sem saída registrada do CME: registre a distribuição antes do uso.');
-    }
     const origin = await institutionOrigin(db, auth.institutionId);
     try {
       return await db.transaction().execute(async (trx) => {
         const created = await trx.insertInto('material_use').values({ institution_id: auth.institutionId, item_id: item.id, surgery_id: surgeryId, sector_id: sectorId, used_at: usedAt, recorded_by: auth.userId, recorded_by_name: auth.displayName, data_origin: origin }).returningAll().executeTakeFirstOrThrow();
         // The package is out of the CME now; when it comes back dirty, the reception opens a new round.
-        if (withoutExit) await trx.updateTable('cme_process').set({ state: 'distribuido', next_steps: ['devolucao'], destination_sector_id: sectorId, updated_at: new Date(), row_version: process.row_version + 1 }).where('id', '=', process.id).execute();
+        let nonconformityId: string | null = null;
+        if (withoutExit) {
+          await trx.updateTable('cme_process').set({ state: 'distribuido', next_steps: ['devolucao'], destination_sector_id: sectorId, updated_at: new Date(), row_version: process.row_version + 1 }).where('id', '=', process.id).execute();
+          const sector = await trx.selectFrom('sector').select('name').where('id', '=', sectorId).executeTakeFirstOrThrow();
+          const nc = await openUseWithoutExitNc(trx, auth, { useId: created.id, labelCode: item.label_code, description: item.description, sectorId, sectorName: sector.name, usedOn: dateInZone(usedAt, tz), origin });
+          nonconformityId = nc.id;
+          await audit(trx, actorOf(req), { action: 'create', entity: 'nonconformity', entityId: nc.id, after: nc, context: { rule: 'cme_uso_sem_saida', materialUse: created.id, notifiedUser: auth.userId } });
+        }
         await audit(trx, actorOf(req), { action: 'create', entity: 'material_use', entityId: created.id, after: { ...created, labelCode: item.label_code, load: item.code } });
-        return { id: created.id };
+        return { id: created.id, withoutExit, nonconformityId };
       });
     } catch (e) {
       if ((e as { code?: string }).code === '23505') throw fieldError('labelCode', 'Material já utilizado: precisa ser reprocessado antes de novo uso.');

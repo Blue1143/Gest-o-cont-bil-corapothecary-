@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDate, type SurgeryDetail, type SurgeryMaterialDto } from '@ccih/domain';
-import { Button, Card, DataTable, Field, FormMessage, type Column } from '@ccih/ui';
+import { AlertBanner, Button, Card, DataTable, Field, FormMessage, type Column } from '@ccih/ui';
 import { useSession } from '../auth/session';
 import { useTimeZone } from '../clinical/shared';
 import { VoidDialog } from '../operations/shared';
@@ -15,6 +15,7 @@ export function SurgeryMaterialsCard({ surgery }: { surgery: SurgeryDetail }) {
   const [label, setLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [voiding, setVoiding] = useState<SurgeryMaterialDto | null>(null);
+  const [withoutExit, setWithoutExit] = useState(false);
   const m = useCmeMutation((labelCode: string) => cme!.addSurgeryMaterial(surgery.id, { labelCode, usedAt: null }));
   if (!cme) return null;
   const canEdit = session.can('surgery:edit');
@@ -28,9 +29,10 @@ export function SurgeryMaterialsCard({ surgery }: { surgery: SurgeryDetail }) {
   ];
   const add = () => {
     setError(null);
+    setWithoutExit(false);
     const code = label.trim().toUpperCase();
     if (code.length < 3) { setError('Informe a etiqueta do pacote.'); return; }
-    m.mutation.mutate(code, { onSuccess: () => setLabel(''), onError: () => undefined });
+    m.mutation.mutate(code, { onSuccess: (r) => { setLabel(''); setWithoutExit(r.withoutExit); }, onError: () => undefined });
   };
   const recalled = surgery.materials.some((x) => x.loadStatus === 'rejeitada');
   return (
@@ -44,6 +46,7 @@ export function SurgeryMaterialsCard({ surgery }: { surgery: SurgeryDetail }) {
           <Button type="submit" variant="primary" disabled={m.mutation.isPending}>{m.mutation.isPending ? 'Registrando…' : 'Registrar uso'}</Button>
         </form>
       ) : null}
+      {withoutExit ? <AlertBanner tone="warn" title="Não conformidade aberta">Uso registrado. O pacote não tinha saída registrada do CME: foi aberta uma não conformidade e você recebeu uma notificação.</AlertBanner> : null}
       <DataTable caption="Pacotes registrados" dense rows={surgery.materials} rowKey={(x) => x.useId} columns={cols} emptyMessage="Nenhum pacote registrado nesta cirurgia." />
       <VoidDialog open={!!voiding} title={`Anular o registro de ${voiding?.labelCode ?? ''}?`} onClose={() => setVoiding(null)} onVoid={(reason) => cme.voidUse(voiding!.useId, reason)} />
     </Card>

@@ -364,10 +364,11 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 | --- | --- | --- |
 | 1 | Etiqueta do pacote impressa na **montagem da carga** | A carga passa a ter a fase "em montagem" (antes do início do ciclo); cada pacote lido na montagem recebe a etiqueta com lote/ciclo e validade |
 | 2 | Etapas obrigatórias: todas, exceto **armazenamento** e **separação**, que são configuráveis | `cme_flow_config.storage_required` / `separation_required` |
-| 3 | Uso cirúrgico sem saída registrada: **alerta** durante um período de transição configurável | `cme_flow_config.exit_required_from`: vazio = só alerta; com data = bloqueio a partir dela |
+| 3 | Uso cirúrgico sem saída registrada **nunca bloqueia** (revisto em 10/10/2026) | O uso é registrado e, na mesma transação, abre uma não conformidade (origem CME) vinculada ao uso e notifica o usuário que registrou o uso; a CME também recebe alerta. O bloqueio por data foi removido (migração 0006) |
 | 4 | Sem operação offline até existir política institucional | A estação sem conexão avisa e não aceita leituras; liberação nunca é offline |
 | 5 | Antivírus **somente quando disponível** | Sem scanner configurado, o arquivo fica "não verificado" (sinalizado, nunca exibido como aprovado); com scanner, só fica disponível após resultado "limpo" |
 | 6 | Code 128 para códigos emitidos; leitura de Code 39 legado; sem QR Code. **Sem leitor, conferência manual no sistema** | O modo manual é oficial por estação: o operador localiza e confirma o item; o servidor aplica as mesmas regras e o evento fica marcado como `manual` |
+| 7 | Conferência manual **sem justificativa** (10/10/2026) | Após a conferência o material segue para a próxima etapa; a estação oferece "Continuar: <próxima etapa>" quando atende essa etapa |
 
 ## 4. Dependências externas e aprovações institucionais
 
@@ -387,18 +388,18 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 **Aprovações institucionais:**
 - Etapas obrigatórias e prazos de cada uma.
 - Momento da impressão da etiqueta (embalagem × montagem da carga).
-- Exigência de justificativa para digitação manual.
+- ~~Exigência de justificativa para digitação manual~~ — decidido em 10/10/2026: não exige.
 - Política offline.
 - Quem aprova correções técnicas.
 - Parâmetros de validade, leitura do IB e qualificação.
 - Política de liberação.
-- Período de transição em que o uso cirúrgico é aceito sem saída registrada.
+- ~~Período de transição em que o uso cirúrgico é aceito sem saída registrada~~ — decidido em 10/10/2026: o uso nunca é bloqueado; gera não conformidade e notificação.
 
 ## 5. Riscos
 
 | Risco | Mitigação |
 | --- | --- |
-| Adoção parcial (etapas sem leitura) gera muitos alertas | Etapas 8–9 configuráveis; prazos sem valor padrão; período de transição explícito |
+| Adoção parcial (etapas sem leitura) gera muitos alertas | Etapas 8–9 configuráveis; prazos sem valor padrão; uso sem saída gera não conformidade em vez de bloquear |
 | Leitores HID com sufixo/velocidade diferentes | Detecção configurável por estação; teste de leitura na configuração da estação |
 | Leitura "válida" usada para pular etapa | Validação central no servidor; exceção só com permissão e auditoria |
 | Perda de evento entre banco e tela | Outbox na mesma transação + replay por id + modo periódico |
@@ -413,6 +414,7 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 | C1 | Concluída | Testes de domínio (códigos com dígito verificador, decisões de leitura, exceção, detecção de leitor) |
 | C2/C3 | Concluídas | Migração 0005; testes de API contra PostgreSQL (continuidade, regra de saída, recusas, idempotência, exceção, pareamento, acesso) |
 | C4 | Concluída | Testes de interface (campo de leitura, idempotência no reenvio, exceção, conferência manual) e E2E do fluxo completo com leitor simulado por teclado |
+| C5 | Concluída | Migração 0006; testes de API (não conformidade + notificação só para quem registrou, leitura da notificação, notificação não pode ser excluída, conferência manual sem justificativa) e de interface (sino com contador, marcar como lida, continuar na próxima etapa) |
 | D1 em diante | Pendentes | — |
 
 **O que C4 entrega:** tela "Estação de leitura" (escolha da estação, etapa, campo que distingue leitor × digitação pelo intervalo entre teclas, câmera via `BarcodeDetector` quando o navegador oferece, conferência manual no sistema, resultado da leitura com o motivo, exceção autorizada, últimas leituras); "Processos" (lista e trilha de cada rodada, com leituras recusadas); "Estações e fluxo" (regras institucionais, cadastro de estações, pareamento de computadores); "Materiais" (emissão de códigos de ativos); carga "em montagem" com início do ciclo; links da rastreabilidade para a trilha do processo.
@@ -422,3 +424,9 @@ Cada etapa termina com lint, typecheck, testes, build, commit e relatório (func
 - O limite geral de requisições (300/min) passou a ser contado por sessão autenticada, e não por IP: estações de uma CME ou um hospital inteiro atrás de um mesmo NAT não dividem mais o mesmo limite. Login e troca de senha continuam limitados por IP, e um cookie de sessão inventado não abre novo limite.
 
 **Ainda não validado (depende de hardware):** leitura com leitores físicos (sufixo, velocidade, Code 39 legado), câmera em tablets/celulares da CME. O E2E simula o leitor por teclado; isso não substitui o roteiro com os modelos reais.
+
+**O que C5 entrega (decisões de 10/10/2026):**
+- Uso de pacote sem saída registrada: nunca bloqueia. Abre uma não conformidade (origem CME, gravidade média, setor do uso) com a origem "uso de material" e o usuário notificado, registrada no log de auditoria; a mesma requisição repetida não abre outra.
+- Notificações pessoais: sino no cabeçalho com o número de não lidas e a página "Notificações". Cada usuário vê só as suas; marcar como lida não apaga (o banco recusa exclusão). O texto é completo mesmo para quem não tem acesso ao módulo de qualidade; o link para a não conformidade só aparece para quem pode abri-la.
+- Conferência manual sem justificativa; depois de uma leitura ou conferência aceita, a estação oferece seguir para a próxima etapa quando a atende.
+- Migração 0006 remove `exit_required_from` e `manual_requires_justification` de `cme_flow_config`.

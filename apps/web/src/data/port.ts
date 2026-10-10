@@ -5,7 +5,7 @@ import type {
   QualityAuditDetail, QualityAuditDto, StaffMember, SupplyDto, SupplyMovementDto, SurveillanceRow, TrainingCoveragePayload, TrainingDto, TrainingSessionDto,
   AttachmentDto, CmeOverview, CmeTestDto, EquipmentStatus, IbControl, InstrumentSetDto, LoadDetail, LoadStatus, LoadSummary, PackagingType, RecordedTestType,
   SterilizerDto, SterilizerType, TestResult, TraceResult,
-  AssetDto, CmeSectorDto, FlowConfigDto, InputMethod, ProcessDetail, ProcessStep, ProcessSummaryDto, ScanConfig, ScanEventDto, ScanResponse, StationDto, Symbology,
+  AssetDto, CmeSectorDto, UseRecorded, UserNotificationDto, FlowConfigDto, InputMethod, ProcessDetail, ProcessStep, ProcessSummaryDto, ScanConfig, ScanEventDto, ScanResponse, StationDto, Symbology,
 } from '@ccih/domain';
 
 export type { InstitutionData, Sector, SectorKind, Unit } from '@ccih/domain';
@@ -298,8 +298,8 @@ export interface CmePort {
   createTest(input: TestInput): Promise<{ id: string }>;
   replaceTest(id: string, input: TestReplaceInput): Promise<{ id: string }>;
   trace(q: string): Promise<TraceResult>;
-  addSurgeryMaterial(surgeryId: string, input: { labelCode: string; usedAt: string | null }): Promise<void>;
-  addLooseUse(input: { labelCode: string; sectorId: string; usedAt: string }): Promise<void>;
+  addSurgeryMaterial(surgeryId: string, input: { labelCode: string; usedAt: string | null }): Promise<UseRecorded>;
+  addLooseUse(input: { labelCode: string; sectorId: string; usedAt: string }): Promise<UseRecorded>;
   voidUse(useId: string, justification: string): Promise<void>;
   upload(entity: AttachmentEntity, entityId: string, file: File): Promise<AttachmentDto>;
   /** Same-origin download link (the session cookie authorizes it; the API logs it). */
@@ -332,6 +332,12 @@ export interface ScanInput {
   destinationSectorId: string | null; originSectorId: string | null; loadId: string | null; packaging: PackagingType | null; justification: string | null; override: boolean;
 }
 
+export interface InboxPort {
+  notifications(q: { situacao: 'nao_lidas' | 'todas' }): Promise<{ rows: UserNotificationDto[]; unread: number }>;
+  markRead(id: string): Promise<void>;
+  markAllRead(): Promise<void>;
+}
+
 export interface CcihDataSource {
   readonly origin: DataOrigin;
   readonly auth?: AuthPort;
@@ -341,6 +347,8 @@ export interface CcihDataSource {
   readonly orgAdmin?: OrgAdminPort;
   readonly operations?: OperationsPort;
   readonly cme?: CmePort;
+  /** Personal notifications of the signed-in user. */
+  readonly inbox?: InboxPort;
   getInstitution(): Promise<WithProvenance<InstitutionData>>;
   getFacts(query: FactsQuery): Promise<WithProvenance<{ rows: FactRow[] }>>;
 }

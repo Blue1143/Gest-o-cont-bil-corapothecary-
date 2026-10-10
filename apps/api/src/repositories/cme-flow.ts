@@ -8,10 +8,10 @@ import type { Db } from './clinical';
 
 export async function loadFlowConfig(db: Db, institutionId: string): Promise<FlowConfigDto> {
   const row = await db.selectFrom('cme_flow_config').selectAll().where('institution_id', '=', institutionId).executeTakeFirst();
-  // No row yet: the safest reading of "configurable" steps is optional, with exit-before-use as alert only.
+  // No row yet: the configurable steps (storage, separation) are optional.
   return row
-    ? { storageRequired: row.storage_required, separationRequired: row.separation_required, exitRequiredFrom: row.exit_required_from, manualRequiresJustification: row.manual_requires_justification, rowVersion: row.row_version }
-    : { storageRequired: false, separationRequired: false, exitRequiredFrom: null, manualRequiresJustification: false, rowVersion: 0 };
+    ? { storageRequired: row.storage_required, separationRequired: row.separation_required, rowVersion: row.row_version }
+    : { storageRequired: false, separationRequired: false, rowVersion: 0 };
 }
 
 export const flowOf = (c: FlowConfigDto): FlowConfig => ({ storageRequired: c.storageRequired, separationRequired: c.separationRequired });

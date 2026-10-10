@@ -136,7 +136,7 @@ function Station() {
                 </AlertBanner>
               ) : null}
               {error ? <FormMessage tone="error">{error}</FormMessage> : null}
-              {last ? <ScanResultPanel last={last} tz={tz} onOverride={session.can('cme:override') ? (justification) => onCode({ code: last.code, method: last.method }, { justification }) : undefined} /> : null}
+              {last ? <ScanResultPanel last={last} tz={tz} stationSteps={station.steps} step={step} onContinue={(s) => setParam({ etapa: s })} onOverride={session.can('cme:override') ? (justification) => onCode({ code: last.code, method: last.method }, { justification }) : undefined} /> : null}
             </Card>
           ) : null}
           {step && station.inputMethods.includes('manual') ? <ManualConference station={station} step={step} busy={busy} onConfirm={(code) => onCode({ code, method: 'manual' })} /> : null}
@@ -148,12 +148,16 @@ function Station() {
   );
 }
 
-function ScanResultPanel({ last, tz, onOverride }: { last: { response: ScanResponse; code: string }; tz: string; onOverride?: ((justification: string) => void) | undefined }) {
+function ScanResultPanel({ last, tz, stationSteps, step, onContinue, onOverride }: {
+  last: { response: ScanResponse; code: string }; tz: string; stationSteps: ProcessStep[]; step: ProcessStep | undefined; onContinue: (step: ProcessStep) => void; onOverride?: ((justification: string) => void) | undefined;
+}) {
   const { response: r } = last;
   const [justification, setJustification] = useState('');
   const [asking, setAsking] = useState(false);
   const p = r.process;
   const overridable = r.result === 'etapa_incorreta' || r.result === 'destino_incompativel';
+  // After a reading or a manual conference the material can go straight on to its next step when this station handles it.
+  const continueHere = p && (r.result === 'aceita' || r.result === 'excecao_autorizada') ? p.nextSteps.filter((s) => s !== step && stationSteps.includes(s)) : [];
   useEffect(() => { setAsking(false); setJustification(''); }, [r.eventId]);
   return (
     <div className={`scan-result scan-${RESULT_TONE[r.result]}`} role="status" aria-live="assertive">
@@ -169,6 +173,11 @@ function ScanResultPanel({ last, tz, onOverride }: { last: { response: ScanRespo
           {p.packageLabel ? <> · pacote <span className="ig-mono">{p.packageLabel}</span></> : null}
           {p.nextSteps.length ? <> · próxima: {p.nextSteps.map((s) => PROCESS_STEP_LABEL[s]).join(' ou ')}</> : null}
         </p>
+      ) : null}
+      {continueHere.length ? (
+        <div className="ig-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {continueHere.map((s) => <Button key={s} size="sm" variant="primary" onClick={() => onContinue(s)}>Continuar: {PROCESS_STEP_LABEL[s]}</Button>)}
+        </div>
       ) : null}
       {r.load ? <p className="ig-small" style={{ margin: 0 }}>Carga <Link to={`/cme/cargas/${r.load.id}`} className="ig-mono">{r.load.code}</Link>: {r.load.packages} pacote(s).</p> : null}
       {overridable && onOverride ? (

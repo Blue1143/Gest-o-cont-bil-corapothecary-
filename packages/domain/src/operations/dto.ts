@@ -45,6 +45,12 @@ export interface ActionPlanDto {
 export interface NonconformityDto {
   id: string; auditId: string | null; auditTitle: string | null; sectorId: string | null; origin: NcOrigin; severity: NcSeverity; description: string;
   detectedOn: string; status: NcStatus; effectiveness: string | null; rowVersion: number; dataOrigin: DataOrigin; actionsTotal: number; actionsOpen: number; actionsOverdue: number;
+  /** Opened automatically from a record (e.g. a package used without CME exit), with the user who was notified. */
+  source: { entity: string; id: string } | null; notifiedUserName: string | null;
+}
+
+export interface UserNotificationDto {
+  id: string; kind: 'nao_conformidade'; title: string; detail: string; entity: string; entityId: string; link: string | null; createdAt: string; readAt: string | null; dataOrigin: DataOrigin;
 }
 export interface NonconformityDetail extends NonconformityDto { history: StatusEntryDto[]; actions: ActionPlanDto[] }
 

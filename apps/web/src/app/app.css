@@ -153,3 +153,5 @@ a { color: var(--primary); }
 .manual-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .manual-list li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: 6px var(--space-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .scan-code { white-space: nowrap; }
+.bell-link { position: relative; gap: 4px; }
+.inbox-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }

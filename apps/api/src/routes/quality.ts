@@ -288,6 +288,7 @@ export async function qualityRoutes(app: FastifyInstance, { db }: { db: Kysely<D
       return {
         id: n.id, auditId: n.audit_id, auditTitle: n.audit_title, sectorId: n.sector_id, origin: n.origin, severity: n.severity, description: n.description, detectedOn: n.detected_on,
         status: n.status, effectiveness: n.effectiveness, rowVersion: n.row_version, dataOrigin: n.data_origin, actionsTotal: mine.length, actionsOpen: open.length, actionsOverdue: open.filter((x) => x.due_on < today).length,
+        source: n.source_entity && n.source_id ? { entity: n.source_entity, id: n.source_id } : null, notifiedUserName: n.notified_user_name,
       };
     });
   }

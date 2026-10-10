@@ -5,6 +5,7 @@ import * as m0002 from './migrations/0002_clinical';
 import * as m0003 from './migrations/0003_operations';
 import * as m0004 from './migrations/0004_cme';
 import * as m0005 from './migrations/0005_cme_flow';
+import * as m0006 from './migrations/0006_cme_exit_nc';
 
 /** Migrations are registered statically (works the same under tsx, tests and the bundled build). */
 const MIGRATIONS: Record<string, Migration> = {
@@ -13,6 +14,7 @@ const MIGRATIONS: Record<string, Migration> = {
   '0003_operations': m0003,
   '0004_cme': m0004,
   '0005_cme_flow': m0005,
+  '0006_cme_exit_nc': m0006,
 };
 
 export const APPEND_ONLY_TABLES = [

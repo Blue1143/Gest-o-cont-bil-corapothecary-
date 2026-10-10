@@ -48,6 +48,7 @@ const FlowSetupPage = named(() => import('../features/cme/SetupPages'), 'FlowSet
 const AssetsPage = named(() => import('../features/cme/SetupPages'), 'AssetsPage');
 const TracePage = named(() => import('../features/cme/TracePage'), 'TracePage');
 const AccountPage = named(() => import('../features/auth/AccountPage'), 'AccountPage');
+const NotificationsPage = named(() => import('../features/inbox/NotificationsPage'), 'NotificationsPage');
 
 const page = (el: ReactElement) => <Suspense fallback={<div className="page"><LoadingState /></div>}>{el}</Suspense>;
 const guarded = (anyOf: Permission[], el: ReactElement) => <Guard anyOf={anyOf}>{page(el)}</Guard>;
@@ -88,6 +89,7 @@ export const routes: RouteObject[] = [
       { path: 'cme/estacoes', element: guarded(['cme:view'], <FlowSetupPage />) },
       { path: 'cme/materiais', element: guarded(['cme:view'], <AssetsPage />) },
       { path: 'conta', element: page(<AccountPage />) },
+      { path: 'notificacoes', element: page(<NotificationsPage />) },
       {
         path: 'admin',
         element: guarded(['config:view', 'users:view', 'audit:view'], <AdminLayout />),

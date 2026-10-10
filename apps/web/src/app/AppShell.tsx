@@ -6,6 +6,7 @@ import { useDataSource, useInstitution } from '../data/source';
 import { useSession } from '../features/auth/session';
 import { IdleWarning } from '../features/auth/IdleWarning';
 import { useAlertCount } from '../features/operations/AlertsPage';
+import { useUnreadNotifications } from '../features/inbox/NotificationsPage';
 import { ErrorBoundary } from './ErrorBoundary';
 import { NAVIGATION } from './navigation';
 import { THEME_LABEL, useTheme } from './theme';
@@ -24,6 +25,7 @@ export function AppShell() {
   const demo = source.origin === 'demo' || institution.data?.provenance.origin === 'demo';
   const roles = (session.info?.roles ?? []).map((r) => ROLE_LABEL[r as RoleCode] ?? r).join(', ');
   const alertCount = useAlertCount();
+  const unread = useUnreadNotifications().data?.unread ?? 0;
   const forced = !!session.info?.mustChangePassword;
   const groups = (forced ? [] : NAVIGATION).map((g) => ({ ...g, items: g.items.filter((i) => session.can(...i.permissions)) })).filter((g) => g.items.length);
 
@@ -47,6 +49,12 @@ export function AppShell() {
           </button>
           {session.info ? (
             <>
+              {source.inbox && !forced ? (
+                <Link to="/notificacoes" className="ig-btn ig-btn-ghost ig-btn-sm bell-link" aria-label={unread ? `Notificações: ${unread} não lida${unread > 1 ? 's' : ''}` : 'Notificações'}>
+                  <Icon name="bell" size={16} />
+                  {unread ? <span className="nav-count" aria-hidden="true">{unread > 99 ? '99+' : unread}</span> : null}
+                </Link>
+              ) : null}
               <Link to="/conta" className="user-chip hide-sm" title={`${roles} — Minha conta`}>
                 <b>{session.info.user.displayName}</b>
                 <span>{roles}</span>

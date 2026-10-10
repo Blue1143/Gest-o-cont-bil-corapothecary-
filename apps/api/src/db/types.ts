@@ -415,6 +415,7 @@ export interface NonconformityTable {
   id: Generated<string>; institution_id: string; audit_id: string | null; sector_id: string | null; origin: 'auditoria' | 'bundle' | 'higiene_maos' | 'cme' | 'notificacao' | 'outro';
   severity: 'baixa' | 'media' | 'alta'; description: string; detected_on: string; status: 'aberta' | 'em_tratamento' | 'aguardando_eficacia' | 'encerrada' | 'cancelada';
   effectiveness: string | null; data_origin: Origin; created_by: string | null; created_at: CreatedAt; updated_at: Timestamp; row_version: RowVersion;
+  notified_user_id: Generated<string | null>; notified_user_name: Generated<string | null>; source_entity: Generated<string | null>; source_id: Generated<string | null>;
 }
 export interface NonconformityStatusTable extends StatusHistoryRow { nonconformity_id: string }
 export interface ActionPlanTable {
@@ -511,8 +512,12 @@ type ScanResultCol = 'aceita' | 'codigo_desconhecido' | 'etapa_incorreta' | 'dup
 type InputMethodCol = 'leitor' | 'camera' | 'manual';
 
 export interface CmeFlowConfigTable {
-  institution_id: string; storage_required: Generated<boolean>; separation_required: Generated<boolean>; exit_required_from: string | null;
-  manual_requires_justification: Generated<boolean>; updated_at: Generated<Date>; row_version: Generated<number>;
+  institution_id: string; storage_required: Generated<boolean>; separation_required: Generated<boolean>; updated_at: Generated<Date>; row_version: Generated<number>;
+}
+
+export interface UserNotificationTable {
+  id: Generated<string>; institution_id: string; user_id: string; kind: 'nao_conformidade'; title: string; detail: string; entity: string; entity_id: string;
+  link: string | null; data_origin: Origin; created_at: CreatedAt; read_at: Date | null;
 }
 
 export interface InstrumentAssetTable {
@@ -607,6 +612,7 @@ export interface DB {
   material_use: MaterialUseTable;
   attachment: AttachmentTable;
   cme_flow_config: CmeFlowConfigTable;
+  user_notification: UserNotificationTable;
   instrument_asset: InstrumentAssetTable;
   scan_station: ScanStationTable;
   station_device: StationDeviceTable;
